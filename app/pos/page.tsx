@@ -352,55 +352,116 @@ const { data: invHeader, error: invErr } = await supabase
           </div>
         )}
 
-        {/* VISTA 2: CLIENTES */}
+{/* VISTA 2: CLIENTES CON CUENTAS POR COBRAR (CxC) */}
         {posTab === 'clientes' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-bold text-white">Directorio de Clientes Asignados</h2>
-              <p className="text-xs text-slate-400">Verifica el estado de compras de tu cartera de clientes durante este mes</p>
+              <h2 className="text-xl font-bold text-white">Directorio de Clientes y Cuentas por Cobrar</h2>
+              <p className="text-xs text-slate-400">Consulta el acumulado de compras del mes y las deudas pendientes a la tasa oficial del día</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {myClients.length === 0 ? (
                 <div className="col-span-full bg-slate-800 p-8 rounded-2xl border border-slate-700 text-center text-slate-400">
-                  No tienes clientes asignados a tu usuario actualmente. Contacta al administrador para asignar tu cartera.
+                  No tienes clientes asignados a tu usuario actualmente.
                 </div>
               ) : (
                 myClients.map((client) => {
-                  // Calcular total vendido a este cliente en el mes actual
+                  // 1. Facturas del mes de este cliente
                   const clientMonthInvoices = monthInvoices.filter((inv) => inv.client_id === client.id);
                   const totalSoldToClient = clientMonthInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
                   const hasPurchasedThisMonth = totalSoldToClient > 0;
 
+                  // 2. Facturas Pendientes por Cobrar (CxC) de este cliente
+                  const pendingInvoices = myInvoices.filter(
+                    (inv) => inv.client_id === client.id && Number(inv.balance_due || 0) > 0.01 && inv.status !== 'paid'
+                  );
+                  const totalDebtUSD = pendingInvoices.reduce((sum, inv) => sum + Number(inv.balance_due || 0), 0);
+                  const totalDebtVES = totalDebtUSD * currentRate;
+
                   return (
                     <div
                       key={client.id}
-                      className={`p-5 rounded-2xl border transition-all ${
-                        hasPurchasedThisMonth
-                          ? 'bg-slate-800 border-emerald-500/40 shadow-lg shadow-emerald-950/20'
+                      className={`p-5 rounded-2xl border transition-all space-y-4 ${
+                        totalDebtUSD > 0
+                          ? 'bg-slate-800/90 border-amber-500/50 shadow-lg shadow-amber-950/20'
+                          : hasPurchasedThisMonth
+                          ? 'bg-slate-800 border-emerald-500/40'
                           : 'bg-slate-800/60 border-slate-700/80'
                       }`}
                     >
-                      <div className="flex justify-between items-start mb-3">
-                        <span className={`px-2.5 py-1 text-[11px] font-extrabold rounded-full ${
-                          hasPurchasedThisMonth ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'
-                        }`}>
-                          {hasPurchasedThisMonth ? '✓ Compró este mes' : 'Sin compras'}
-                        </span>
+                      {/* Estado y RIF */}
+                      <div className="flex justify-between items-start">
+                        <div className="flex gap-1.5 flex-wrap">
+                          <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${
+                            hasPurchasedThisMonth ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'
+                          }`}>
+                            {hasPurchasedThisMonth ? '✓ Compró este mes' : 'Sin compras este mes'}
+                          </span>
+
+                          {totalDebtUSD > 0 && (
+                            <span className="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 animate-pulse">
+                              ⚠️ Deuda Pendiente
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs text-slate-400 font-mono">{client.document_id || 'Sin RIF/CI'}</span>
                       </div>
 
-                      <h3 className="text-lg font-bold text-white mb-1">{client.name}</h3>
-                      <p className="text-xs text-slate-400 mb-4">{client.phone || 'Sin teléfono'} • {client.address || 'Sin dirección'}</p>
+                      {/* Nombre y Contacto */}
+                      <div>
+                        <h3 className="text-lg font-bold text-white mb-1">{client.name}</h3>
+                        <p className="text-xs text-slate-400">{client.phone || 'Sin teléfono'} • {client.address || 'Sin dirección'}</p>
+                      </div>
 
-                      <div className="border-t border-slate-700/60 pt-3 flex justify-between items-center">
-                        <span className="text-xs text-slate-400 uppercase font-semibold">Acumulado Mes:</span>
-                        <div className="text-right">
-                          <span className={`text-base font-extrabold ${hasPurchasedThisMonth ? 'text-emerald-400' : 'text-slate-400'}`}>
-                            ${totalSoldToClient.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] text-slate-400 block font-mono">Bs. {(totalSoldToClient * currentRate).toFixed(2)}</span>
+                      {/* Resumen de Cuentas por Cobrar (Deuda) */}
+                      <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/80 space-y-2">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-slate-400 uppercase font-semibold">Saldo Pendiente (CxC):</span>
+                          <div className="text-right">
+                            <span className={`text-base font-extrabold ${totalDebtUSD > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
+                              ${totalDebtUSD.toFixed(2)}
+                            </span>
+                          </div>
                         </div>
+
+                        <div className="flex justify-between items-center text-xs border-t border-slate-800 pt-1.5">
+                          <span className="text-slate-500 text-[11px]">Al cambio del día (BCV):</span>
+                          <span className="font-mono text-emerald-400 font-bold">
+                            Bs. {totalDebtVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Desplegable de Facturas Vencidas / Pendientes */}
+                      {pendingInvoices.length > 0 && (
+                        <div className="space-y-2 pt-1 border-t border-slate-700/50">
+                          <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">
+                            Facturas a Crédito ({pendingInvoices.length}):
+                          </span>
+                          <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
+                            {pendingInvoices.map((inv) => (
+                              <div key={inv.id} className="bg-slate-900/50 p-2 rounded-lg text-xs flex justify-between items-center border border-slate-800">
+                                <div>
+                                  <span className="font-mono text-blue-400 font-bold block">{inv.invoice_number}</span>
+                                  <span className="text-[10px] text-slate-500">{new Date(inv.created_at).toLocaleDateString('es-VE')}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-bold text-rose-400">${Number(inv.balance_due).toFixed(2)}</span>
+                                  <span className="text-[10px] text-slate-400 block font-mono">
+                                    Bs. {(Number(inv.balance_due) * currentRate).toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Acumulado de Compras del Mes */}
+                      <div className="border-t border-slate-700/60 pt-3 flex justify-between items-center text-xs">
+                        <span className="text-slate-400 font-semibold">Ventas del Mes:</span>
+                        <span className="font-bold text-white">${totalSoldToClient.toFixed(2)}</span>
                       </div>
                     </div>
                   );
@@ -409,7 +470,6 @@ const { data: invHeader, error: invErr } = await supabase
             </div>
           </div>
         )}
-
         {/* VISTA 3: DASHBOARD */}
         {posTab === 'dashboard' && (
           <div className="space-y-6">
