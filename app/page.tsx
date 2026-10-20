@@ -11,7 +11,7 @@ export default function Home() {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'inventory' | 'clients' | 'invoices' | 'cxc' | 'expenses' | 'analytics' | 'payroll' | 'purchases' | 'cxp' | 'configuracion' | 'ventas'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'inventory' | 'clients' | 'invoices' | 'cxc' | 'expenses' | 'analytics' | 'payroll' | 'purchases' | 'cxp' | 'configuracion' | 'ventas' | 'bancos'>('dashboard');
 
   const [invoices, setInvoices] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -20,7 +20,7 @@ export default function Home() {
   const [products, setProducts] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
-  const [Purchases, setPurchases] = useState<any[]>([]);
+  const [purchases, setPurchases] = useState<any[]>([]);
 
   const [purchaseCart, setPurchaseCart] = useState<any[]>([]);
   const [purchaseProdId, setPurchaseProdId] = useState('');
@@ -38,6 +38,13 @@ export default function Home() {
     notes: ''
   });
 
+  // Estados Módulo de Bancos
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [bankTransactions, setBankTransactions] = useState<any[]>([]);
+  const [selectedBankId, setSelectedBankId] = useState('');
+  const [newBank, setNewBank] = useState({ bank_name: '', account_number: '', currency: 'USD', initial_balance: 0 });
+  const [newTx, setNewTx] = useState({ description: '', reference_number: '', amount: '', type: 'ingreso' });
+
   // Estados de Empleados y Nómina
   const [employees, setEmployees] = useState<any[]>([]);
   const [newEmp, setNewEmp] = useState({
@@ -50,7 +57,6 @@ export default function Home() {
     payment_frequency: 'Quincenal'
   });
 
-  // Estado de Pago de Nómina
   const [newPayrollPay, setNewPayrollPay] = useState({
     employee_id: '',
     base_salary_paid: 0,
@@ -61,7 +67,7 @@ export default function Home() {
     payment_method: 'Transferencia'
   });
 
-  // Estados para el Módulo de Configuración
+  // Estados Configuración
   const [activeConfigTab, setActiveConfigTab] = useState<'empresa' | 'tickets' | 'usuarios' | 'roles' | 'pagos'>('empresa');
   const [tenantSettings, setTenantSettings] = useState<any>({
     default_credit_days: 5,
@@ -223,6 +229,12 @@ export default function Home() {
       .order('created_at', { ascending: false });
 
     if (suppPayData) setSupplierPayments(suppPayData);
+
+    const { data: bankData } = await supabase.from('bank_accounts').select('*').eq('tenant_id', tenantId);
+    if (bankData) setBankAccounts(bankData);
+
+    const { data: txData } = await supabase.from('bank_transactions').select('*, bank_accounts(bank_name)').eq('tenant_id', tenantId).order('transaction_date', { ascending: false });
+    if (txData) setBankTransactions(txData);
   };
 
   const handleUpdateExchangeRate = async (e: React.FormEvent) => {
@@ -704,12 +716,12 @@ export default function Home() {
   };
 
   const handleExportPurchases = () => {
-    if (!Purchases || Purchases.length === 0) {
+    if (!purchases || purchases.length === 0) {
       alert('No hay compras registradas para exportar.');
       return;
     }
 
-    const formattedData = Purchases.map((p) => ({
+    const formattedData = purchases.map((p) => ({
       ID_Compra: p.id,
       Proveedor: p.suppliers?.name || 'N/A',
       Nro_Factura_Proveedor: p.supplier_invoice_number || 'N/A',
@@ -826,6 +838,14 @@ export default function Home() {
                 }`}
               >
                 Cuentas por Pagar
+              </button>
+              <button
+                onClick={() => setCurrentView('bancos')}
+                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
+                  currentView === 'bancos' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+                }`}
+              >
+                Bancos y Conciliación
               </button>
               <button
                 onClick={() => setCurrentView('clients')}
@@ -1478,7 +1498,7 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {Purchases.map((p) => (
+                      {purchases.map((p) => (
                         <tr key={p.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
                           <td className="p-3 font-mono text-blue-400">{p.supplier_invoice_number || 'N/A'}</td>
                           <td className="p-3 font-medium text-white">{p.suppliers?.name || 'Proveedor General'}</td>
@@ -1505,7 +1525,7 @@ export default function Home() {
               </header>
 
               {(() => {
-                const comprasPendientes = Purchases.filter(p => {
+                const comprasPendientes = purchases.filter(p => {
                   const total = Number(p.total || 0);
                   const pagado = Number(p.amount_paid || 0);
                   const saldo = total - pagado;
@@ -1664,7 +1684,7 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody>
-                      {Purchases.map((p) => {
+                      {purchases.map((p) => {
                         const total = Number(p.total || 0);
                         const pagado = Number(p.amount_paid || 0);
                         const saldo = total - pagado;
@@ -1702,6 +1722,203 @@ export default function Home() {
                           </tr>
                         );
                       })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentView === 'bancos' && (
+            <div className="space-y-8">
+              <header className="border-b border-slate-800 pb-4">
+                <h2 className="text-2xl font-bold text-white">Módulo de Bancos y Conciliación Bancaria</h2>
+                <p className="text-sm text-slate-400">Administra tus cuentas, registra movimientos y concilia tus estados de cuenta</p>
+              </header>
+
+              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl space-y-4">
+                <h3 className="text-lg font-semibold text-white">Registrar Nueva Cuenta o Billetera</h3>
+                <form 
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!tenant?.id) return;
+                    const { error } = await supabase.from('bank_accounts').insert([{
+                      tenant_id: tenant.id,
+                      bank_name: newBank.bank_name,
+                      account_number: newBank.account_number,
+                      currency: newBank.currency,
+                      current_balance: newBank.initial_balance
+                    }]);
+                    if (!error) {
+                      alert('¡Cuenta bancaria creada con éxito!');
+                      setNewBank({ bank_name: '', account_number: '', currency: 'USD', initial_balance: 0 });
+                      fetchAllData(tenant.id);
+                    } else {
+                      alert('Error: ' + error.message);
+                    }
+                  }}
+                  className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm"
+                >
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre / Banco</label>
+                    <input required type="text" value={newBank.bank_name} onChange={e => setNewBank({...newBank, bank_name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="Ej: Zelle / Banesco" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nº Cuenta / Correo</label>
+                    <input required type="text" value={newBank.account_number} onChange={e => setNewBank({...newBank, account_number: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="Ej: 0134-... o correo" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Moneda</label>
+                    <select value={newBank.currency} onChange={e => setNewBank({...newBank, currency: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                      <option value="USD">USD ($)</option>
+                      <option value="VES">VES (Bs)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Saldo Inicial</label>
+                    <input type="number" step="0.01" value={newBank.initial_balance} onChange={e => setNewBank({...newBank, initial_balance: Number(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" />
+                  </div>
+                  <div className="md:col-span-4 flex justify-end">
+                    <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-2 rounded-lg transition-colors">
+                      + Crear Cuenta Bancaria
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {bankAccounts.map(acc => (
+                  <div key={acc.id} className="bg-slate-800 border border-slate-700 p-6 rounded-xl space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400">{acc.currency}</span>
+                      <span className="text-xs text-slate-400 font-mono">{acc.account_number}</span>
+                    </div>
+                    <h4 className="text-lg font-bold text-white">{acc.bank_name}</h4>
+                    <p className="text-2xl font-extrabold text-emerald-400">${Number(acc.current_balance).toFixed(2)}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl space-y-4">
+                <h3 className="text-lg font-semibold text-white">Registrar Transacción (Ingreso / Egreso)</h3>
+                <form 
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!tenant?.id || !selectedBankId) return alert('Selecciona una cuenta bancaria');
+                    
+                    const amountNum = Number(newTx.amount);
+                    const finalAmount = newTx.type === 'egreso' ? -Math.abs(amountNum) : Math.abs(amountNum);
+
+                    const { error } = await supabase.from('bank_transactions').insert([{
+                      tenant_id: tenant.id,
+                      bank_account_id: selectedBankId,
+                      description: newTx.description,
+                      reference_number: newTx.reference_number,
+                      amount: finalAmount,
+                      type: newTx.type
+                    }]);
+
+                    if (!error) {
+                      const accObj = bankAccounts.find(a => a.id === selectedBankId);
+                      if (accObj) {
+                        const newBal = Number(accObj.current_balance) + finalAmount;
+                        await supabase.from('bank_accounts').update({ current_balance: newBal }).eq('id', selectedBankId);
+                      }
+
+                      alert('¡Transacción registrada con éxito!');
+                      setNewTx({ description: '', reference_number: '', amount: '', type: 'ingreso' });
+                      setSelectedBankId('');
+                      fetchAllData(tenant.id);
+                    } else {
+                      alert('Error: ' + error.message);
+                    }
+                  }}
+                  className="grid grid-cols-1 md:grid-cols-5 gap-4 text-sm"
+                >
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Cuenta Bancaria</label>
+                    <select value={selectedBankId} onChange={e => setSelectedBankId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                      <option value="">Seleccionar Cuenta...</option>
+                      {bankAccounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>{acc.bank_name} ({acc.currency})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Tipo</label>
+                    <select value={newTx.type} onChange={e => setNewTx({...newTx, type: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                      <option value="ingreso">Ingreso (Débito/Depósito)</option>
+                      <option value="egreso">Egreso (Pago/Retiro)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Descripción</label>
+                    <input required type="text" value={newTx.description} onChange={e => setNewTx({...newTx, description: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="Ej: Cobro factura #001" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nº Referencia</label>
+                    <input type="text" value={newTx.reference_number} onChange={e => setNewTx({...newTx, reference_number: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="Ej: 981273" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Monto ($ / Bs)</label>
+                    <input required type="number" step="0.01" value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="0.00" />
+                  </div>
+                  <div className="md:col-span-5 flex justify-end">
+                    <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2 rounded-lg transition-colors">
+                      Registrar Movimiento y Actualizar Saldo
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl space-y-4">
+                <h3 className="text-lg font-semibold text-white">Conciliación de Movimientos Bancarios</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm text-slate-300">
+                    <thead className="text-xs uppercase bg-slate-900 text-slate-400">
+                      <tr>
+                        <th className="p-3">Fecha</th>
+                        <th className="p-3">Cuenta</th>
+                        <th className="p-3">Descripción</th>
+                        <th className="p-3">Referencia</th>
+                        <th className="p-3">Monto</th>
+                        <th className="p-3">Estado Conciliación</th>
+                        <th className="p-3">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bankTransactions.map(tx => (
+                        <tr key={tx.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
+                          <td className="p-3 text-xs text-slate-400">{new Date(tx.transaction_date).toLocaleDateString('es-VE')}</td>
+                          <td className="p-3 font-medium text-white">{tx.bank_accounts?.bank_name}</td>
+                          <td className="p-3">{tx.description}</td>
+                          <td className="p-3 font-mono text-blue-400">{tx.reference_number || 'N/A'}</td>
+                          <td className={`p-3 font-bold ${Number(tx.amount) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            ${Number(tx.amount).toFixed(2)}
+                          </td>
+                          <td className="p-3">
+                            {tx.is_reconciled ? (
+                              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Conciliado ✓</span>
+                            ) : (
+                              <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">Pendiente</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <button 
+                              onClick={async () => {
+                                const newState = !tx.is_reconciled;
+                                const { error } = await supabase.from('bank_transactions').update({ is_reconciled: newState }).eq('id', tx.id);
+                                if (!error && tenant?.id) {
+                                  fetchAllData(tenant.id);
+                                }
+                              }}
+                              className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${tx.is_reconciled ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-emerald-600 text-white hover:bg-emerald-500'}`}
+                            >
+                              {tx.is_reconciled ? 'Desmarcar' : 'Conciliar'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
