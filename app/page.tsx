@@ -22,6 +22,9 @@ export default function Home() {
   const [payments, setPayments] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
 
+const [clientCode, setClientCode] = useState('');
+const [editingClient, setEditingClient] = useState<any | null>(null);
+
   const [purchaseCart, setPurchaseCart] = useState<any[]>([]);
   const [purchaseProdId, setPurchaseProdId] = useState('');
   const [purchaseQty, setPurchaseQty] = useState('');
@@ -44,6 +47,9 @@ export default function Home() {
   const [selectedBankId, setSelectedBankId] = useState('');
   const [newBank, setNewBank] = useState({ bank_name: '', account_number: '', currency: 'USD', initial_balance: 0 });
   const [newTx, setNewTx] = useState({ description: '', reference_number: '', amount: '', type: 'ingreso' });
+
+const [sellers, setSellers] = useState<any[]>([]);
+const [assignedSellerId, setAssignedSellerId] = useState('');
 
   // Estados de Empleados y Nómina
   const [employees, setEmployees] = useState<any[]>([]);
@@ -190,6 +196,13 @@ export default function Home() {
     const { data: prodData } = await supabase.from('products').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false });
     if (prodData) setProducts(prodData);
 
+
+const { data: sellersData } = await supabase
+  .from('profiles')
+  .select('id, full_name, role')
+  .eq('tenant_id', tenantId);
+
+if (sellersData) setSellers(sellersData);
     const { data: suppliersData } = await supabase.from('suppliers').select('*').eq('tenant_id', tenantId).order('name', { ascending: true });
     if (suppliersData) setSuppliers(suppliersData);
 
@@ -335,26 +348,31 @@ export default function Home() {
     }
   };
 
-  const handleAddClient = async (e: React.FormEvent) => {
+const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.tenant_id) return;
     setLoadingClient(true);
 
     try {
+      const generatedCode = clientCode.trim() || `CLI-${(clients.length + 1).toString().padStart(4, '0')}`;
+
       const { error } = await supabase.from('clients').insert([
         {
           tenant_id: profile.tenant_id,
+          client_code: generatedCode,
           name: clientName,
           document_id: clientDoc,
           email: clientEmail,
           phone: clientPhone,
           address: clientAddress,
+          assigned_seller_id: assignedSellerId || null,
         },
       ]);
 
       if (error) throw error;
-      setClientName(''); setClientDoc(''); setClientEmail(''); setClientPhone(''); setClientAddress('');
+      setClientName(''); setClientDoc(''); setClientEmail(''); setClientPhone(''); setClientAddress(''); setAssignedSellerId(''); setClientCode('');
       fetchAllData(profile.tenant_id);
+      alert('¡Cliente registrado con éxito!');
     } catch (err: any) {
       alert('Error al registrar cliente: ' + err.message);
     } finally {
@@ -362,6 +380,35 @@ export default function Home() {
     }
   };
 
+  const handleUpdateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClient) return;
+    setLoadingClient(true);
+
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update({
+          client_code: editingClient.client_code,
+          name: editingClient.name,
+          document_id: editingClient.document_id,
+          assigned_seller_id: editingClient.assigned_seller_id || null,
+          email: editingClient.email,
+          phone: editingClient.phone,
+          address: editingClient.address,
+        })
+        .eq('id', editingClient.id);
+
+      if (error) throw error;
+      setEditingClient(null);
+      if (profile?.tenant_id) fetchAllData(profile.tenant_id);
+      alert('¡Cliente actualizado con éxito!');
+    } catch (err: any) {
+      alert('Error al actualizar cliente: ' + err.message);
+    } finally {
+      setLoadingClient(false);
+    }
+  };
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.tenant_id || !selectedClientId || !selectedProductId) {
@@ -2275,23 +2322,34 @@ export default function Home() {
             </div>
           )}
 
-          {currentView === 'clients' && (
+{currentView === 'clients' && (
             <>
               <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
                 <div>
                   <h2 className="text-2xl font-bold text-white">Clientes</h2>
-                  <p className="text-sm text-slate-400">Directorio de clientes.</p>
+                  <p className="text-sm text-slate-400">Directorio de clientes y asignación de vendedores.</p>
                 </div>
                 <button onClick={handleExportClients} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm">
                   📊 Exportar Clientes
                 </button>
               </header>
 
+              {/* Formulario de Registro */}
               <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl mb-8 shadow-sm">
-                <h3 className="text-lg font-semibold text-white mb-4">Registrar Cliente</h3>
-                <form onSubmit={handleAddClient} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <h3 className="text-lg font-semibold text-white mb-4">Registrar Nuevo Cliente</h3>
+                <form onSubmit={handleAddClient} className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre</label>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Código Único</label>
+                    <input
+                      type="text"
+                      placeholder={`Ej: CLI-${(clients.length + 1).toString().padStart(4, '0')}`}
+                      value={clientCode}
+                      onChange={(e) => setClientCode(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre / Razon Social</label>
                     <input
                       type="text"
                       required
@@ -2305,17 +2363,30 @@ export default function Home() {
                     <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">RIF / DNI</label>
                     <input
                       type="text"
-                      placeholder="J-1234"
+                      placeholder="J-12345678-9"
                       value={clientDoc}
                       onChange={(e) => setClientDoc(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
                     />
                   </div>
                   <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Vendedor Asignado</label>
+                    <select
+                      value={assignedSellerId}
+                      onChange={(e) => setAssignedSellerId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- Sin Asignar --</option>
+                      {sellers.map((s) => (
+                        <option key={s.id} value={s.id}>{s.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Correo</label>
                     <input
                       type="email"
-                      placeholder="correo@correo.com"
+                      placeholder="correo@cliente.com"
                       value={clientEmail}
                       onChange={(e) => setClientEmail(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
@@ -2325,60 +2396,184 @@ export default function Home() {
                     <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Teléfono</label>
                     <input
                       type="text"
-                      placeholder="0414"
+                      placeholder="0414-0000000"
                       value={clientPhone}
                       onChange={(e) => setClientPhone(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
                     />
                   </div>
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Dirección</label>
                     <input
                       type="text"
-                      placeholder="Dirección"
+                      placeholder="Dirección fiscal o comercial"
                       value={clientAddress}
                       onChange={(e) => setClientAddress(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
                     />
                   </div>
-                  <div className="flex items-end">
+                  <div className="flex items-end md:col-span-4 justify-end">
                     <button
                       type="submit"
                       disabled={loadingClient}
-                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors disabled:opacity-50"
+                      className="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-6 rounded-lg text-sm transition-colors disabled:opacity-50"
                     >
-                      {loadingClient ? 'Guardando...' : 'Registrar'}
+                      {loadingClient ? 'Guardando...' : '+ Registrar Cliente'}
                     </button>
                   </div>
                 </form>
               </div>
 
+              {/* Tabla de Clientes */}
               <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-sm">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-700/50 border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
+                      <th className="p-4">CÓDIGO</th>
                       <th className="p-4">Cliente</th>
                       <th className="p-4">RIF</th>
+                      <th className="p-4">Vendedor Asignado</th>
                       <th className="p-4">Contacto</th>
                       <th className="p-4">Dirección</th>
+                      <th className="p-4 text-center">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700 text-sm">
                     {clients.length === 0 ? (
-                      <tr><td colSpan={4} className="p-6 text-center text-slate-400">Sin clientes.</td></tr>
+                      <tr><td colSpan={7} className="p-6 text-center text-slate-400">Sin clientes registrados.</td></tr>
                     ) : (
                       clients.map((c) => (
                         <tr key={c.id} className="hover:bg-slate-700/20">
+                          <td className="p-4 font-mono text-blue-400 font-bold">{c.client_code || `CLI-${String(c.id).slice(0, 4).toUpperCase()}`}</td>
                           <td className="p-4 font-medium text-white">{c.name}</td>
-                          <td className="p-4 text-slate-400">{c.document_id || 'N/A'}</td>
-                          <td className="p-4 text-slate-300">{c.email} / {c.phone}</td>
-                          <td className="p-4 text-slate-400">{c.address}</td>
+                          <td className="p-4 text-slate-400 font-mono">{c.document_id || 'N/A'}</td>
+                          <td className="p-4 text-emerald-400 font-medium">
+                            {sellers.find((s) => s.id === c.assigned_seller_id)?.full_name || 'Sin Asignar'}
+                          </td>
+                          <td className="p-4 text-slate-300">{c.email || 'N/A'} {c.phone ? `/ ${c.phone}` : ''}</td>
+                          <td className="p-4 text-slate-400">{c.address || 'N/A'}</td>
+                          <td className="p-4 text-center">
+                            <button
+                              onClick={() => setEditingClient(c)}
+                              className="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              ✏️ Modificar
+                            </button>
+                          </td>
                         </tr>
                       ))
                     )}
                   </tbody>
                 </table>
               </div>
+
+              {/* Modal de Modificación de Cliente */}
+              {editingClient && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+                  <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
+                    <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+                      <h3 className="text-lg font-bold text-white">Editar Cliente ({editingClient.name})</h3>
+                      <button onClick={() => setEditingClient(null)} className="text-slate-400 hover:text-white font-bold">✕</button>
+                    </div>
+
+                    <form onSubmit={handleUpdateClient} className="space-y-3 text-sm">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Código</label>
+                          <input
+                            type="text"
+                            value={editingClient.client_code || ''}
+                            onChange={(e) => setEditingClient({ ...editingClient, client_code: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">RIF / DNI</label>
+                          <input
+                            type="text"
+                            value={editingClient.document_id || ''}
+                            onChange={(e) => setEditingClient({ ...editingClient, document_id: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre / Razón Social</label>
+                        <input
+                          type="text"
+                          required
+                          value={editingClient.name || ''}
+                          onChange={(e) => setEditingClient({ ...editingClient, name: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Vendedor Asignado</label>
+                        <select
+                          value={editingClient.assigned_seller_id || ''}
+                          onChange={(e) => setEditingClient({ ...editingClient, assigned_seller_id: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                        >
+                          <option value="">-- Sin Asignar --</option>
+                          {sellers.map((s) => (
+                            <option key={s.id} value={s.id}>{s.full_name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Correo</label>
+                          <input
+                            type="email"
+                            value={editingClient.email || ''}
+                            onChange={(e) => setEditingClient({ ...editingClient, email: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Teléfono</label>
+                          <input
+                            type="text"
+                            value={editingClient.phone || ''}
+                            onChange={(e) => setEditingClient({ ...editingClient, phone: e.target.value })}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Dirección</label>
+                        <input
+                          type="text"
+                          value={editingClient.address || ''}
+                          onChange={(e) => setEditingClient({ ...editingClient, address: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white"
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-3 border-t border-slate-700">
+                        <button
+                          type="button"
+                          onClick={() => setEditingClient(null)}
+                          className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-2 rounded-lg text-xs"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={loadingClient}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2 rounded-lg text-xs"
+                        >
+                          {loadingClient ? 'Guardando...' : 'Guardar Cambios'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
