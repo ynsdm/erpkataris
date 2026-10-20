@@ -26,7 +26,12 @@ const [clientCode, setClientCode] = useState('');
 const [editingClient, setEditingClient] = useState<any | null>(null);
 const [editingQuotaSeller, setEditingQuotaSeller] = useState<any | null>(null);
 const [newQuotaValue, setNewQuotaValue] = useState('');
-
+const [showNewSellerModal, setShowNewSellerModal] = useState(false);
+const [newSellerName, setNewSellerName] = useState('');
+const [newSellerEmail, setNewSellerEmail] = useState('');
+const [newSellerPassword, setNewSellerPassword] = useState('');
+const [newSellerQuota, setNewSellerQuota] = useState('1000');
+const [loadingNewSeller, setLoadingNewSeller] = useState(false);
 
   const [purchaseCart, setPurchaseCart] = useState<any[]>([]);
   const [purchaseProdId, setPurchaseProdId] = useState('');
@@ -87,6 +92,50 @@ const [assignedSellerId, setAssignedSellerId] = useState('');
   });
   const [newRoleName, setNewRoleName] = useState('');
   const [customRoles, setCustomRoles] = useState<any[]>([]);
+
+const handleCreateSeller = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.tenant_id) return;
+    setLoadingNewSeller(true);
+
+    try {
+      // 1. Crear el usuario en Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: newSellerEmail,
+        password: newSellerPassword,
+      });
+
+      if (authError) throw authError;
+      const userId = authData.user?.id;
+
+      if (!userId) throw new Error('No se pudo obtener el ID del usuario creado.');
+
+      // 2. Insertar o actualizar su perfil en la tabla profiles con el rol 'seller'
+      const { error: profileError } = await supabase.from('profiles').upsert([
+        {
+          id: userId,
+          tenant_id: profile.tenant_id,
+          full_name: newSellerName,
+          role: 'seller',
+          monthly_quota: parseFloat(newSellerQuota) || 1000,
+        },
+      ]);
+
+      if (profileError) throw profileError;
+
+      alert('¡Vendedor registrado con éxito! Ya puede iniciar sesión en /pos');
+      setShowNewSellerModal(false);
+      setNewSellerName('');
+      setNewSellerEmail('');
+      setNewSellerPassword('');
+      setNewSellerQuota('1000');
+      if (profile?.tenant_id) fetchAllData(profile.tenant_id);
+    } catch (err: any) {
+      alert('Error al registrar vendedor: ' + err.message);
+    } finally {
+      setLoadingNewSeller(false);
+    }
+  };
 
   const handleSaveSettings = async () => {
     try {
@@ -1182,6 +1231,12 @@ const handleAddClient = async (e: React.FormEvent) => {
                   <h2 className="text-2xl font-bold text-white">Gestión de Vendedores y Cuotas</h2>
                   <p className="text-sm text-slate-400">Control de rendimiento individual y cuotas de ventas mensuales.</p>
                 </div>
+                <button
+                  onClick={() => setShowNewSellerModal(true)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
+                >
+                  + Nuevo Vendedor
+                </button>
               </header>
 
               {/* Tarjetas / Tabla de Vendedores */}
@@ -1231,7 +1286,84 @@ const handleAddClient = async (e: React.FormEvent) => {
                             <span className="text-slate-400">Cuota Asignada:</span>
                             <span className="text-white font-bold">${quota.toFixed(2)}</span>
                           </div>
+{/* Modal de Nuevo Vendedor */}
+              {showNewSellerModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+                  <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+                    <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+                      <h3 className="text-lg font-bold text-white">Registrar Nuevo Vendedor</h3>
+                      <button onClick={() => setShowNewSellerModal(false)} className="text-slate-400 hover:text-white font-bold">✕</button>
+                    </div>
 
+                    <form onSubmit={handleCreateSeller} className="space-y-3 text-sm">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre Completo</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej: Carlos Gómez"
+                          value={newSellerName}
+                          onChange={(e) => setNewSellerName(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Correo Electrónico (Para iniciar sesión)</label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="vendedor@kataris.com"
+                          value={newSellerEmail}
+                          onChange={(e) => setNewSellerEmail(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Contraseña Inicial</label>
+                        <input
+                          type="password"
+                          required
+                          placeholder="••••••••"
+                          value={newSellerPassword}
+                          onChange={(e) => setNewSellerPassword(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Cuota Mensual Inicial ($ USD)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={newSellerQuota}
+                          onChange={(e) => setNewSellerQuota(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-bold"
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-3 border-t border-slate-700">
+                        <button
+                          type="button"
+                          onClick={() => setShowNewSellerModal(false)}
+                          className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-2 rounded-lg text-xs"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={loadingNewSeller}
+                          className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2 rounded-lg text-xs disabled:opacity-50"
+                        >
+                          {loadingNewSeller ? 'Registrando...' : 'Crear Vendedor'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
                           <div className="flex justify-between text-xs font-semibold">
                             <span className="text-slate-400">Ventas Este Mes:</span>
                             <span className="text-emerald-400 font-bold">${totalSoldMonth.toFixed(2)}</span>
