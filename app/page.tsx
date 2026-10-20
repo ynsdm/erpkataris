@@ -24,6 +24,9 @@ export default function Home() {
 
 const [clientCode, setClientCode] = useState('');
 const [editingClient, setEditingClient] = useState<any | null>(null);
+const [editingQuotaSeller, setEditingQuotaSeller] = useState<any | null>(null);
+const [newQuotaValue, setNewQuotaValue] = useState('');
+
 
   const [purchaseCart, setPurchaseCart] = useState<any[]>([]);
   const [purchaseProdId, setPurchaseProdId] = useState('');
@@ -196,13 +199,13 @@ const [assignedSellerId, setAssignedSellerId] = useState('');
     const { data: prodData } = await supabase.from('products').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false });
     if (prodData) setProducts(prodData);
 
-
+// 10. Vendedores / Usuarios
 const { data: sellersData } = await supabase
   .from('profiles')
-  .select('id, full_name, role')
+  .select('id, full_name, role, monthly_quota') // <-- Añadido monthly_quota
   .eq('tenant_id', tenantId);
-
 if (sellersData) setSellers(sellersData);
+
     const { data: suppliersData } = await supabase.from('suppliers').select('*').eq('tenant_id', tenantId).order('name', { ascending: true });
     if (suppliersData) setSuppliers(suppliersData);
 
@@ -250,6 +253,36 @@ if (sellersData) setSellers(sellersData);
     if (txData) setBankTransactions(txData);
   };
 
+const handleUpdateQuota = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!editingQuotaSeller) return;
+
+  try {
+    const quotaNum = parseFloat(newQuotaValue);
+    if (isNaN(quotaNum) || quotaNum < 0) return alert('Por favor ingresa un monto válido');
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ monthly_quota: quotaNum })
+      .eq('id', editingQuotaSeller.id);
+
+    if (error) throw error;
+
+    // Actualizar estado local de vendedores inmediatamente
+    setSellers((prevSellers) =>
+      prevSellers.map((s) =>
+        s.id === editingQuotaSeller.id ? { ...s, monthly_quota: quotaNum } : s
+      )
+    );
+
+    alert('¡Cuota de ventas actualizada con éxito!');
+    setEditingQuotaSeller(null);
+    setNewQuotaValue('');
+    if (profile?.tenant_id) fetchAllData(profile.tenant_id);
+  } catch (err: any) {
+    alert('Error al actualizar la cuota: ' + err.message);
+  }
+};
   const handleUpdateExchangeRate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenant?.id) return;
@@ -902,6 +935,16 @@ const handleAddClient = async (e: React.FormEvent) => {
               >
                 Clientes
               </button>
+<button
+  onClick={() => setCurrentView('sellers')}
+  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+    currentView === 'sellers'
+      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+  }`}
+>
+  <span>Vendedores</span>
+</button>
               <button
                 onClick={() => setCurrentView('configuracion')}
                 className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
@@ -1132,7 +1175,133 @@ const handleAddClient = async (e: React.FormEvent) => {
               </div>
             </>
           )}
+{currentView === 'sellers' && (
+            <>
+              <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Gestión de Vendedores y Cuotas</h2>
+                  <p className="text-sm text-slate-400">Control de rendimiento individual y cuotas de ventas mensuales.</p>
+                </div>
+              </header>
 
+              {/* Tarjetas / Tabla de Vendedores */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {sellers.length === 0 ? (
+                  <div className="col-span-full bg-slate-800 p-8 rounded-xl border border-slate-700 text-center text-slate-400">
+                    No hay usuarios o vendedores registrados en el sistema.
+                  </div>
+                ) : (
+                  sellers.map((seller) => {
+                    // Calcular ventas del mes actual para este vendedor
+                    const now = new Date();
+                    const sellerMonthInvoices = invoices.filter((inv) => {
+                      const d = new Date(inv.created_at);
+                      return (
+                        (inv.seller_id === seller.id || inv.created_by === seller.id) &&
+                        d.getMonth() === now.getMonth() &&
+                        d.getFullYear() === now.getFullYear()
+                      );
+                    });
+
+                    const totalSoldMonth = sellerMonthInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+                    const quota = Number(seller.monthly_quota || 1000);
+                    const percent = Math.min(Math.round((totalSoldMonth / quota) * 100), 100);
+
+                    return (
+                      <div key={seller.id} className="bg-slate-800 border border-slate-700 p-6 rounded-2xl space-y-4 shadow-sm">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="text-lg font-bold text-white">{seller.full_name || 'Vendedor sin nombre'}</h3>
+                            <span className="text-xs text-blue-400 font-mono">Rol: {seller.role || 'Vendedor'}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setEditingQuotaSeller(seller);
+                              setNewQuotaValue(quota.toString());
+                            }}
+                            className="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            🎯 Asignar Cuota
+                          </button>
+                        </div>
+
+                        {/* Avance de Cuota */}
+                        <div className="space-y-2 bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60">
+                          <div className="flex justify-between text-xs font-semibold">
+                            <span className="text-slate-400">Cuota Asignada:</span>
+                            <span className="text-white font-bold">${quota.toFixed(2)}</span>
+                          </div>
+
+                          <div className="flex justify-between text-xs font-semibold">
+                            <span className="text-slate-400">Ventas Este Mes:</span>
+                            <span className="text-emerald-400 font-bold">${totalSoldMonth.toFixed(2)}</span>
+                          </div>
+
+                          {/* Barra de progreso */}
+                          <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700 mt-2">
+                            <div
+                              className={`h-full transition-all duration-300 ${percent >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
+                              style={{ width: `${percent}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-[11px] text-right text-slate-400 font-extrabold">{percent}% Alcanzado</p>
+                        </div>
+
+                        {/* Cantidad de pedidos procesados */}
+                        <div className="flex justify-between items-center text-xs text-slate-400 pt-2 border-t border-slate-700/60">
+                          <span>Pedidos del mes:</span>
+                          <span className="font-bold text-white font-mono">{sellerMonthInvoices.length}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Modal de Asignar / Editar Cuota */}
+              {editingQuotaSeller && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+                  <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+                    <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+                      <h3 className="text-lg font-bold text-white">Asignar Cuota a {editingQuotaSeller.full_name}</h3>
+                      <button onClick={() => setEditingQuotaSeller(null)} className="text-slate-400 hover:text-white font-bold">✕</button>
+                    </div>
+
+                    <form onSubmit={handleUpdateQuota} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nueva Cuota Mensual ($ USD)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={newQuotaValue}
+                          onChange={(e) => setNewQuotaValue(e.target.value)}
+                          placeholder="Ej: 1500.00"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-bold text-lg focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-3 pt-3 border-t border-slate-700">
+                        <button
+                          type="button"
+                          onClick={() => setEditingQuotaSeller(null)}
+                          className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-2 rounded-lg text-xs"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2 rounded-lg text-xs"
+                        >
+                          Guardar Cuota
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
           {currentView === 'expenses' && isAdmin && (
             <>
               <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
