@@ -58,15 +58,18 @@ export default function POSPage() {
 
         const tenantId = profData.tenant_id;
 
-        // 2. Mis Facturas / Pedidos (Filtradas por mi id de vendedor)
+// 2. Mis Facturas / Pedidos (Cargadas de forma directa)
         const { data: invData } = await supabase
           .from('invoices')
           .select('*, clients(*)')
           .eq('tenant_id', tenantId)
-          .or(`seller_id.eq.${userId},created_by.eq.${userId}`)
           .order('created_at', { ascending: false });
 
-        if (invData) setMyInvoices(invData);
+        if (invData) {
+          // Filtramos en memoria para asegurarnos de ver las tuyas o las generales
+          const filtered = invData.filter((inv: any) => inv.seller_id === userId || inv.created_by === userId || !inv.seller_id);
+          setMyInvoices(filtered);
+        }
 
         // 3. Mis Clientes Asignados
         const { data: cliData } = await supabase
@@ -138,23 +141,23 @@ export default function POSPage() {
       const nextNum = (myInvoices.length + 1).toString().padStart(4, '0');
       const invoiceNumber = `PED-${nextNum}`;
 
-      const { data: invHeader, error: invErr } = await supabase
-        .from('invoices')
-        .insert([
-          {
-            tenant_id: profile.tenant_id,
-            client_id: selectedClientId,
-            seller_id: profile.id,
-            total: totalCart,
-            status: paymentTerm === 'credito' ? 'credito' : 'issued',
-            payment_term: paymentTerm,
-            balance_due: paymentTerm === 'credito' ? totalCart : 0,
-            exchange_rate: currentRate,
-            invoice_number: invoiceNumber,
-          },
-        ])
-        .select()
-        .single();
+const { data: invHeader, error: invErr } = await supabase
+  .from('invoices')
+  .insert([
+    {
+      tenant_id: profile.tenant_id,
+      client_id: selectedClientId,
+      seller_id: profile.id, // <-- Este campo vincula la venta a tu usuario
+      total: totalCart,
+      status: paymentTerm === 'credito' ? 'credito' : 'issued',
+      payment_term: paymentTerm,
+      balance_due: paymentTerm === 'credito' ? totalCart : 0,
+      exchange_rate: currentRate,
+      invoice_number: invoiceNumber,
+    },
+  ])
+  .select()
+  .single();
 
       if (invErr) throw invErr;
 
