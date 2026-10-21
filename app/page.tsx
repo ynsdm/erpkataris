@@ -13,6 +13,147 @@ export default function Home() {
   const [tenant, setTenant] = useState<any>(null);
   const [currentView, setCurrentView] = useState<'dashboard' | 'inventory' | 'clients' | 'invoices' | 'cxc' | 'expenses' | 'analytics' | 'payroll' | 'purchases' | 'cxp' | 'configuracion' | 'ventas' | 'sellers' | 'bancos'>('dashboard');
 
+
+
+
+const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
+const [showProcessPurchaseModal, setShowProcessPurchaseModal] = useState(false);
+const [purchasesHistory, setPurchasesHistory] = useState([]);
+
+const [supplierName, setSupplierName] = useState('');
+const [supplierRif, setSupplierRif] = useState('');
+const [supplierPhone, setSupplierPhone] = useState('');
+const [supplierContact, setSupplierContact] = useState('');
+const [supplierAddress, setSupplierAddress] = useState('');
+
+const [purchaseSupplierId, setPurchaseSupplierId] = useState('');
+const [purchaseProductId, setPurchaseProductId] = useState('');
+const [purchaseQty, setPurchaseQty] = useState('');
+const [purchaseIva, setPurchaseIva] = useState('16');
+const [purchaseNotes, setPurchaseNotes] = useState('');
+
+
+
+const handleAddSupplier = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!profile?.tenant_id) return;
+  try {
+    const { error } = await supabase.from('suppliers').insert([{
+      tenant_id: profile.tenant_id,
+      name: supplierName,
+      rif: supplierRif,
+      phone: supplierPhone,
+      contact_person: supplierContact,
+      address: supplierAddress
+    }]);
+    if (error) throw error;
+    setShowAddSupplierModal(false);
+    setSupplierName(''); setSupplierRif(''); setSupplierPhone(''); setSupplierContact(''); setSupplierAddress('');
+    fetchAllData(profile.tenant_id);
+    alert('¡Proveedor registrado con éxito!');
+  } catch (err: any) {
+    alert('Error al registrar proveedor: ' + err.message);
+  }
+};
+
+const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
+  const [tempProductId, setTempProductId] = useState('');
+  const [tempQty, setTempQty] = useState('');
+  const [tempCost, setTempCost] = useState('');
+
+  // --- FUNCIONES LÓGICAS DE COMPRAS ---
+  const handleAddItemToPurchase = () => {
+    if (!tempProductId || !tempQty || !tempCost) {
+      alert('Seleccione producto, cantidad y costo');
+      return;
+    }
+    const prod = products.find((p: any) => p.id === tempProductId);
+    if (!prod) return;
+
+    setPurchaseItems((prev) => [
+      ...prev,
+      {
+        productId: tempProductId,
+        productName: prod.name,
+        qty: parseFloat(tempQty),
+        cost: parseFloat(tempCost)
+      }
+    ]);
+    setTempProductId('');
+    setTempQty('');
+    setTempCost('');
+  };
+
+  const handleRemovePurchaseItem = (index: number) => {
+    setPurchaseItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const calculateTotalPurchaseAmount = () => {
+    const subtotal = purchaseItems.reduce((acc, item) => acc + (item.qty * item.cost), 0);
+    const ivaPercentage = parseFloat(purchaseIva) || 16;
+    return subtotal * (1 + ivaPercentage / 100);
+  };
+
+  const handleProcessPurchase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.tenant_id || !purchaseSupplierId || purchaseItems.length === 0) {
+      alert('Debe seleccionar un proveedor y agregar al menos un producto.');
+      return;
+    }
+
+    const sup = suppliers.find((s: any) => s.id === purchaseSupplierId);
+    const totalAmount = calculateTotalPurchaseAmount();
+
+    try {
+      const { error: purchaseError } = await supabase.from('purchases_history').insert([{
+        tenant_id: profile.tenant_id,
+        supplier_id: purchaseSupplierId,
+        supplier_name: sup?.name || 'Proveedor',
+        invoice_number: purchaseInvoiceNum,
+        total_amount: totalAmount,
+        bcv_rate: currentRate,
+        notes: purchaseNotes
+      }]);
+      if (purchaseError) throw purchaseError;
+
+      for (const item of purchaseItems) {
+        const prod = products.find((p: any) => p.id === item.productId);
+        if (prod) {
+          const newStock = (Number(prod.stock) || 0) + item.qty;
+          await supabase.from('products').update({
+            stock: newStock,
+            cost: item.cost
+          }).eq('id', item.productId);
+        }
+      }
+
+      setShowProcessPurchaseModal(false);
+      setPurchaseSupplierId('');
+      setPurchaseInvoiceNum('');
+      setPurchaseItems([]);
+      setPurchaseNotes('');
+      fetchAllData(profile.tenant_id);
+      alert('¡Factura de compra registrada y stock actualizado con éxito!');
+    } catch (err: any) {
+      alert('Error al procesar la factura: ' + err.message);
+    }
+  };
+
+
+// Estados de modales y filtros de clientes
+const [showAddClientModal, setShowAddClientModal] = useState(false);
+const [clientSearch, setClientSearch] = useState('');
+const [selectedRouteFilter, setSelectedRouteFilter] = useState('ALL');
+
+// Nuevos campos profesionales para clientes
+const [clientGps, setClientGps] = useState('');
+const [clientRoute, setClientRoute] = useState('Ruta Principal');
+const [clientCreditLimit, setClientCreditLimit] = useState('500');
+const [clientMinSales, setClientMinSales] = useState('100');
+
+const [selectedProductDetails, setSelectedProductDetails] = useState<any>(null);
+const [editingProduct, setEditingProduct] = useState<any>(null);
+
   const [invoices, setInvoices] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [clients, setClients] = useState<any[]>([]);
@@ -22,6 +163,23 @@ export default function Home() {
   const [payments, setPayments] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
 
+// Estado para controlar la visibilidad del modal de productos
+const [showAddProductModal, setShowAddProductModal] = useState(false);
+
+// Estados para los campos avanzados del producto
+const [productCost, setProductCost] = useState('');
+const [productIva, setProductIva] = useState('16.00');
+const [productCategory, setProductCategory] = useState('');
+const [productBrand, setProductBrand] = useState('');
+const [productManufacturer, setProductManufacturer] = useState('');
+const [productUnit, setProductUnit] = useState('Und');
+const [productWeight, setProductWeight] = useState('0');
+const [productReorder, setProductReorder] = useState('5');
+const [productMinOrder, setProductMinOrder] = useState('1');
+const [productMaxOrder, setProductMaxOrder] = useState('999999');
+const [allowNegative, setAllowNegative] = useState(false);
+const [allowDecimals, setAllowDecimals] = useState(false);
+const [productStatus, setProductStatus] = useState('activo');
 const [clientCode, setClientCode] = useState('');
 const [editingClient, setEditingClient] = useState<any | null>(null);
 const [editingQuotaSeller, setEditingQuotaSeller] = useState<any | null>(null);
@@ -35,7 +193,6 @@ const [loadingNewSeller, setLoadingNewSeller] = useState(false);
 
   const [purchaseCart, setPurchaseCart] = useState<any[]>([]);
   const [purchaseProdId, setPurchaseProdId] = useState('');
-  const [purchaseQty, setPurchaseQty] = useState('');
   const [purchaseCost, setPurchaseCost] = useState('');
   const [purchaseInvoiceNum, setPurchaseInvoiceNum] = useState('');
   const [selectedSupplier, setSelectedSupplier] = useState('');
@@ -70,6 +227,100 @@ const [assignedSellerId, setAssignedSellerId] = useState('');
     base_salary: 0,
     payment_frequency: 'Quincenal'
   });
+
+const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
+const [showProcessPayrollModal, setShowProcessPayrollModal] = useState(false);
+
+const [employeeName, setEmployeeName] = useState('');
+const [employeeLastName, setEmployeeLastName] = useState('');
+const [employeeCi, setEmployeeCi] = useState('');
+const [employeeRole, setEmployeeRole] = useState('');
+const [employeeSalary, setEmployeeSalary] = useState('');
+const [employeeFrequency, setEmployeeFrequency] = useState('Quincenal');
+
+const [payrollEmployeeId, setPayrollEmployeeId] = useState('');
+const [payrollBaseSalary, setPayrollBaseSalary] = useState('');
+const [payrollBonuses, setPayrollBonuses] = useState('0');
+const [payrollCommissions, setPayrollCommissions] = useState('0');
+const [payrollDeductions, setPayrollDeductions] = useState('0');
+const [payrollPeriod, setPayrollPeriod] = useState('');
+const [payrollBank, setPayrollBank] = useState('');
+
+const handleAddEmployee = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!profile?.tenant_id) return;
+  try {
+    const { error } = await supabase.from('employees').insert([{
+      tenant_id: profile.tenant_id,
+      name: employeeName,
+      first_name: employeeName,
+      last_name: employeeLastName,
+      ci: employeeCi,
+      national_id: employeeCi,
+      role: employeeRole,
+      position: employeeRole, // <-- Cubrimos ambos nombres de columna para el cargo
+      base_salary: parseFloat(employeeSalary) || 0,
+      payment_frequency: employeeFrequency
+    }]);
+    
+    if (error) throw error;
+    
+    setShowAddEmployeeModal(false);
+    setEmployeeName(''); 
+    setEmployeeLastName(''); 
+    setEmployeeCi(''); 
+    setEmployeeRole(''); 
+    setEmployeeSalary('');
+    
+    fetchAllData(profile.tenant_id);
+    alert('¡Empleado registrado con éxito!');
+  } catch (err: any) {
+    alert('Error al registrar empleado: ' + err.message);
+  }
+
+};
+const handleSelectEmployeeForPayroll = (empId: string) => {
+  setPayrollEmployeeId(empId);
+  const emp = employees.find((e: any) => e.id === empId);
+  if (emp) {
+    setPayrollBaseSalary(emp.base_salary || 0);
+  } else {
+    setPayrollBaseSalary('');
+  }
+};
+
+const handleProcessPayroll = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!profile?.tenant_id || !payrollEmployeeId) return;
+
+  const emp = employees.find((e: any) => e.id === payrollEmployeeId);
+  const netAmount = (parseFloat(payrollBaseSalary) || 0) + (parseFloat(payrollBonuses) || 0) + (parseFloat(payrollCommissions) || 0) - (parseFloat(payrollDeductions) || 0);
+
+  try {
+    const { error } = await supabase.from('payroll_history').insert([{
+      tenant_id: profile.tenant_id,
+      employee_id: payrollEmployeeId,
+      employee_name: `${emp.name} ${emp.last_name}`,
+      base_salary: parseFloat(payrollBaseSalary) || 0,
+      bonuses: parseFloat(payrollBonuses) || 0,
+      commissions: parseFloat(payrollCommissions) || 0,
+      deductions: parseFloat(payrollDeductions) || 0,
+      net_amount: netAmount,
+      period: payrollPeriod,
+      bank_name: payrollBank
+    }]);
+
+    if (error) throw error;
+    setShowProcessPayrollModal(false);
+    setPayrollEmployeeId(''); setPayrollBaseSalary(''); setPayrollBonuses('0'); setPayrollCommissions('0'); setPayrollDeductions('0'); setPayrollPeriod(''); setPayrollBank('');
+    fetchAllData(profile.tenant_id);
+    alert('¡Pago de nómina procesado y registrado con éxito!');
+  } catch (err: any) {
+    alert('Error al procesar nómina: ' + err.message);
+  }
+};
+
+const [payrollHistory, setPayrollHistory] = useState([]);
 
   const [newPayrollPay, setNewPayrollPay] = useState({
     employee_id: '',
@@ -275,8 +526,15 @@ if (sellersData) setSellers(sellersData);
     const { data: invData } = await supabase.from('invoices').select('*, clients(*)').eq('tenant_id', tenantId).order('created_at', { ascending: false });
     if (invData) setInvoices(invData);
 
-    const { data: payData } = await supabase.from('payments').select('*, invoices(id, clients(name))').eq('tenant_id', tenantId).order('created_at', { ascending: false });
-    if (payData) setPayments(payData);
+ // Cargar Historial de Nómina
+const { data: payData, error: payError } = await supabase
+  .from('payroll_history')
+  .select('*')
+  .order('created_at', { ascending: false });
+
+if (payData) {
+  setPayrollHistory(payData);
+}
 
     const { data: expData } = await supabase.from('expenses').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false });
     if (expData) setExpenses(expData);
@@ -415,64 +673,89 @@ const handleUpdateQuota = async (e: React.FormEvent) => {
     window.print();
   };
 
-  const handleAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile?.tenant_id) return;
-    setLoadingInv(true);
+const handleAddProduct = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!profile?.tenant_id) return;
+  setLoadingInv(true);
 
-    try {
-      const { error } = await supabase.from('products').insert([
-        {
-          tenant_id: profile.tenant_id,
-          name: productName,
-          sku: productSku,
-          price: parseFloat(productPrice),
-          stock: parseInt(productStock),
-        },
-      ]);
+  try {
+    const { error } = await supabase.from('products').insert([
+      {
+        tenant_id: profile.tenant_id,
+        name: productName,
+        sku: productSku,
+        price: parseFloat(productPrice) || 0,
+        cost: parseFloat(productCost) || 0,
+        stock: allowDecimals ? parseFloat(productStock) : parseInt(productStock),
+        iva: parseFloat(productIva) || 16.0,
+        category: productCategory,
+        brand: productBrand,
+        manufacturer: productManufacturer,
+        unit_measure: productUnit,
+        weight_per_unit: parseFloat(productWeight) || 0,
+        reorder_point: parseFloat(productReorder) || 5,
+        min_order_qty: parseFloat(productMinOrder) || 1,
+        max_order_qty: parseFloat(productMaxOrder) || 999999,
+        allow_negative: allowNegative,
+        allow_decimals: allowDecimals,
+        is_active: productStatus,
+      },
+    ]);
 
-      if (error) throw error;
-      setProductName(''); setProductSku(''); setProductPrice(''); setProductStock('');
-      fetchAllData(profile.tenant_id);
-    } catch (err: any) {
-      alert('Error al registrar producto: ' + err.message);
-    } finally {
-      setLoadingInv(false);
-    }
-  };
+    if (error) throw error;
 
+    // Limpiar campos y cerrar modal
+    setProductName('');
+    setProductSku('');
+    setProductPrice('');
+    setProductCost('');
+    setProductStock('');
+    setShowAddProductModal(false);
+
+    fetchAllData(profile.tenant_id);
+    alert('¡Producto guardado exitosamente!');
+  } catch (err: any) {
+    alert('Error al registrar producto: ' + err.message);
+  } finally {
+    setLoadingInv(false);
+  }
+};
 const handleAddClient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profile?.tenant_id) return;
-    setLoadingClient(true);
+  e.preventDefault();
+  if (!profile?.tenant_id) return;
+  setLoadingClient(true);
 
-    try {
-      const generatedCode = clientCode.trim() || `CLI-${(clients.length + 1).toString().padStart(4, '0')}`;
+  try {
+    const generatedCode = clientCode.trim() || `CLI-${(clients.length + 1).toString().padStart(4, '0')}`;
 
-      const { error } = await supabase.from('clients').insert([
-        {
-          tenant_id: profile.tenant_id,
-          client_code: generatedCode,
-          name: clientName,
-          document_id: clientDoc,
-          email: clientEmail,
-          phone: clientPhone,
-          address: clientAddress,
-          assigned_seller_id: assignedSellerId || null,
-        },
-      ]);
+    const { error } = await supabase.from('clients').insert([
+      {
+        tenant_id: profile.tenant_id,
+        client_code: generatedCode,
+        name: clientName,
+        document_id: clientDoc,
+        email: clientEmail,
+        phone: clientPhone,
+        address: clientAddress,
+        gps_location: clientGps, // <--- Nuevo
+        route: clientRoute || 'Ruta Principal', // <--- Nuevo
+        credit_limit: parseFloat(clientCreditLimit) || 0, // <--- Nuevo
+        min_monthly_sales: parseFloat(clientMinSales) || 0, // <--- Nuevo
+        assigned_seller_id: assignedSellerId || null,
+      },
+    ]);
 
-      if (error) throw error;
-      setClientName(''); setClientDoc(''); setClientEmail(''); setClientPhone(''); setClientAddress(''); setAssignedSellerId(''); setClientCode('');
-      fetchAllData(profile.tenant_id);
-      alert('¡Cliente registrado con éxito!');
-    } catch (err: any) {
-      alert('Error al registrar cliente: ' + err.message);
-    } finally {
-      setLoadingClient(false);
-    }
-  };
-
+    if (error) throw error;
+    setClientName(''); setClientDoc(''); setClientEmail(''); setClientPhone(''); setClientAddress(''); setClientGps(''); setClientRoute('Ruta Principal'); setClientCreditLimit('500'); setClientMinSales('100'); setAssignedSellerId(''); setClientCode('');
+    setShowAddClientModal(false); // Cierra el modal automáticamente
+    fetchAllData(profile.tenant_id);
+    alert('¡Cliente registrado con éxito!');
+  } catch (err: any) {
+    alert('Error al registrar cliente: ' + err.message);
+  } finally {
+    setLoadingClient(false);
+  }
+};
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingClient) return;
@@ -1542,338 +1825,613 @@ const handleAddClient = async (e: React.FormEvent) => {
             </>
           )}
 
-          {currentView === 'inventory' && (
-            <>
-              <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Gestión de Inventario</h2>
-                  <p className="text-sm text-slate-400">Control de productos y existencias.</p>
-                </div>
-                <button onClick={handleExportInventory} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm">
-                  📊 Exportar Inventario
-                </button>
-              </header>
+{currentView === 'inventory' && (
+  <div className="space-y-6">
+    <header className="flex justify-between items-center border-b border-slate-800 pb-4">
+      <div>
+        <h2 className="text-2xl font-bold text-white">Gestión de Inventario</h2>
+        <p className="text-sm text-slate-400">Control avanzado de productos, existencias, costos y márgenes.</p>
+      </div>
+      <div className="flex gap-3">
+        <button 
+          onClick={handleExportInventory} 
+          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
+        >
+          📊 Exportar Inventario
+        </button>
+        <button 
+          onClick={() => setShowAddProductModal(true)} 
+          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all"
+        >
+          + Agregar Producto
+        </button>
+      </div>
+    </header>
 
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl mb-8 shadow-sm">
-                <h3 className="text-lg font-semibold text-white mb-4">Agregar Producto</h3>
-                <form onSubmit={handleAddProduct} className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Producto"
-                      value={productName}
-                      onChange={(e) => setProductName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">SKU</label>
-                    <input
-                      type="text"
-                      placeholder="SKU"
-                      value={productSku}
-                      onChange={(e) => setProductSku(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Precio ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      placeholder="0.00"
-                      value={productPrice}
-                      onChange={(e) => setProductPrice(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Stock</label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="10"
-                      value={productStock}
-                      onChange={(e) => setProductStock(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      type="submit"
-                      disabled={loadingInv}
-                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition-colors disabled:opacity-50"
-                    >
-                      {loadingInv ? 'Guardando...' : 'Agregar'}
-                    </button>
-                  </div>
-                </form>
-              </div>
+    {/* Tabla de Inventario limpia y sin formularios estáticos encima */}
+<div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-sm">
+  <table className="w-full text-left border-collapse text-sm">
+    <thead>
+      <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+        <th className="p-4">PRODUCTO</th>
+        <th className="p-4">SKU</th>
+        <th className="p-4">CATEGORÍA</th>
+        <th className="p-4">COSTO ($)</th>
+        <th className="p-4">PRECIO ($)</th>
+        <th className="p-4">PRECIO (BS.)</th>
+        <th className="p-4">STOCK</th>
+        <th className="p-4">ESTADO</th>
+        <th className="p-4 text-center">ACCIONES</th>
+      </tr>
+    </thead>
+    <tbody className="divide-y divide-slate-700/60 text-slate-300">
+      {products.length === 0 ? (
+        <tr>
+          <td colSpan={9} className="p-8 text-center text-slate-400">
+            No hay productos registrados en el inventario.
+          </td>
+        </tr>
+      ) : (
+        products.map((p) => (
+          <tr key={p.id} className="hover:bg-slate-700/20">
+            <td className="p-4 font-bold text-white">{p.name}</td>
+            <td className="p-4 font-mono text-slate-400">{p.sku || 'N/A'}</td>
+            <td className="p-4 text-xs font-semibold uppercase">{p.category || 'General'}</td>
+            <td className="p-4 text-amber-400 font-semibold">${Number(p.cost || 0).toFixed(2)}</td>
+            <td className="p-4 text-emerald-400 font-semibold">${Number(p.price).toFixed(2)}</td>
+            <td className="p-4 font-mono text-slate-300">Bs. {(Number(p.price) * currentRate).toFixed(2)}</td>
+            <td className="p-4 font-bold text-white">{p.stock} {p.unit_measure || 'Und'}</td>
+            <td className="p-4">
+              <span className={`px-2.5 py-1 text-xs font-bold rounded-full uppercase ${p.is_active === 'inactivo' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                {p.is_active || 'activo'}
+              </span>
+            </td>
+            <td className="p-4 text-center flex justify-center gap-2">
+              <button 
+                onClick={() => setSelectedProductDetails(p)} 
+                title="Ver Detalles"
+                className="bg-slate-700 hover:bg-slate-600 text-slate-200 p-2 rounded-xl text-xs transition-colors"
+              >
+                👁️
+              </button>
+              <button 
+                onClick={() => setEditingProduct(p)} 
+                title="Editar Producto"
+                className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 p-2 rounded-xl text-xs border border-blue-500/30 transition-colors"
+              >
+                ✏️
+              </button>
+            </td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</div>
+</div>
 
-              <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-700/50 border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
-                      <th className="p-4">Producto</th>
-                      <th className="p-4">SKU</th>
-                      <th className="p-4">Precio ($)</th>
-                      <th className="p-4">Precio (Bs.)</th>
-                      <th className="p-4">Stock</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700 text-sm">
-                    {products.length === 0 ? (
-                      <tr><td colSpan={5} className="p-6 text-center text-slate-400">Sin productos.</td></tr>
-                    ) : (
-                      products.map((p) => (
-                        <tr key={p.id} className="hover:bg-slate-700/20">
-                          <td className="p-4 font-medium text-white">{p.name}</td>
-                          <td className="p-4 text-slate-400">{p.sku || 'N/A'}</td>
-                          <td className="p-4 text-emerald-400 font-semibold">${Number(p.price).toFixed(2)}</td>
-                          <td className="p-4 text-slate-300">Bs. {(Number(p.price) * currentRate).toFixed(2)}</td>
-                          <td className="p-4 text-slate-300">{p.stock}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+)}
 
-          {currentView === 'purchases' && (
-            <div className="space-y-8">
-              <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Compras y Recepción de Mercancía</h2>
-                  <p className="text-sm text-slate-400">Registra entradas de stock y facturas de proveedores</p>
-                </div>
-                <button 
-                  onClick={handleExportPurchases}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
-                >
-                  📊 Exportar Compras
-                </button>
-              </header>
+{/* 🔍 MODAL DE DETALLES DEL PRODUCTO */}
+{selectedProductDetails && (
+  <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 text-slate-100">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 className="text-lg font-bold text-white">📋 Ficha Técnica: {selectedProductDetails.name}</h3>
+        <button onClick={() => setSelectedProductDetails(null)} className="text-slate-400 hover:text-white font-bold text-lg">✕</button>
+      </div>
 
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl shadow-sm space-y-4">
-                <h3 className="text-lg font-semibold text-white">Registrar Nuevo Proveedor</h3>
-                <form 
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    const form = e.target as HTMLFormElement;
-                    const name = (form.elements.namedItem('supName') as HTMLInputElement).value;
-                    const rif = (form.elements.namedItem('supRif') as HTMLInputElement).value;
-                    const phone = (form.elements.namedItem('supPhone') as HTMLInputElement).value;
-                    
-                    const { error } = await supabase.from('suppliers').insert([{ 
-                      tenant_id: tenant?.id, 
-                      name, 
-                      rif, 
-                      phone 
-                    }]);
+      <div className="grid grid-cols-2 gap-4 text-sm bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+        <div><span className="text-slate-400">SKU:</span> <span className="font-mono text-white">{selectedProductDetails.sku || 'N/A'}</span></div>
+        <div><span className="text-slate-400">Categoría:</span> <span className="font-semibold text-white uppercase">{selectedProductDetails.category || 'General'}</span></div>
+        <div><span className="text-slate-400">Marca / Fabricante:</span> <span className="text-white">{selectedProductDetails.brand || '-'} / {selectedProductDetails.manufacturer || '-'}</span></div>
+        <div><span className="text-slate-400">Unidad de Medida:</span> <span className="text-white">{selectedProductDetails.unit_measure || 'Und'}</span></div>
+        <div><span className="text-slate-400">Costo Actual:</span> <span className="text-amber-400 font-bold">${Number(selectedProductDetails.cost || 0).toFixed(2)}</span></div>
+        <div><span className="text-slate-400">Precio de Venta:</span> <span className="text-emerald-400 font-bold">${Number(selectedProductDetails.price || 0).toFixed(2)}</span></div>
+        <div><span className="text-slate-400">IVA:</span> <span className="text-white">{selectedProductDetails.iva || 16}%</span></div>
+        <div><span className="text-slate-400">Stock Actual:</span> <span className="text-white font-bold">{selectedProductDetails.stock}</span></div>
+        <div><span className="text-slate-400">Punto de Reorden:</span> <span className="text-white">{selectedProductDetails.reorder_point}</span></div>
+        <div><span className="text-slate-400">Peso Unitario:</span> <span className="text-white">{selectedProductDetails.weight_per_unit} Kg</span></div>
+        <div><span className="text-slate-400">Mín / Máx Pedido:</span> <span className="text-white">{selectedProductDetails.min_order_qty} / {selectedProductDetails.max_order_qty}</span></div>
+        <div><span className="text-slate-400">Facturar Negativo:</span> <span className="text-white">{selectedProductDetails.allow_negative ? 'Sí' : 'No'}</span></div>
+      </div>
 
-                    if (!error) {
-                      alert('¡Proveedor registrado exitosamente!');
-                      form.reset();
-                      fetchAllData(tenant?.id);
-                    } else {
-                      alert('Error al registrar proveedor: ' + error.message);
-                    }
-                  }} 
-                  className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"
-                >
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre / Empresa</label>
-                    <input 
-                      type="text" 
-                      name="supName" 
-                      required 
-                      placeholder="Ej: Distribuidora C.A." 
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" 
-                    />
-                  </div>
+      <div className="flex justify-end pt-2">
+        <button onClick={() => setSelectedProductDetails(null)} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs">Cerrar</button>
+      </div>
+    </div>
+  </div>
+)}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">RIF / Documento</label>
-                    <input 
-                      type="text" 
-                      name="supRif" 
-                      placeholder="Ej: J-12345678-9" 
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" 
-                    />
-                  </div>
+{/* ✏️ MODAL DE EDICIÓN AVANZADA DE PRODUCTO */}
+{editingProduct && (
+  <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-4xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-slate-100">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 className="text-lg font-bold text-white">✏️ Editar Producto: {editingProduct.name}</h3>
+        <button onClick={() => setEditingProduct(null)} className="text-slate-400 hover:text-white font-bold text-lg">✕</button>
+      </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Teléfono</label>
-                    <input 
-                      type="text" 
-                      name="supPhone" 
-                      placeholder="Ej: 0414-1234567" 
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500" 
-                    />
-                  </div>
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        if (!profile?.tenant_id) return;
+        try {
+          const { error } = await supabase.from('products').update({
+            name: editingProduct.name,
+            sku: editingProduct.sku,
+            price: parseFloat(editingProduct.price) || 0,
+            cost: parseFloat(editingProduct.cost) || 0,
+            iva: parseFloat(editingProduct.iva) || 16,
+            category: editingProduct.category,
+            brand: editingProduct.brand,
+            manufacturer: editingProduct.manufacturer,
+            unit_measure: editingProduct.unit_measure,
+            weight_per_unit: parseFloat(editingProduct.weight_per_unit) || 0,
+            reorder_point: parseFloat(editingProduct.reorder_point) || 5,
+            min_order_qty: parseFloat(editingProduct.min_order_qty) || 1,
+            max_order_qty: parseFloat(editingProduct.max_order_qty) || 999999,
+            allow_negative: editingProduct.allow_negative,
+            allow_decimals: editingProduct.allow_decimals,
+            is_active: editingProduct.is_active
+          }).eq('id', editingProduct.id);
 
-                  <button 
-                    type="submit" 
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors"
-                  >
-                    + Guardar Proveedor
-                  </button>
-                </form>
-              </div>
+          if (error) throw error;
+          setEditingProduct(null);
+          fetchAllData(profile.tenant_id);
+          alert('¡Producto actualizado con éxito!');
+        } catch (err: any) {
+          alert('Error al actualizar: ' + err.message);
+        }
+      }} className="space-y-4 text-sm">
+        
+        {/* Fila 1: Nombre, SKU y Estado */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Nombre *</label>
+            <input type="text" required value={editingProduct.name || ''} onChange={(e) => setEditingProduct({...editingProduct, name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">SKU</label>
+            <input type="text" value={editingProduct.sku || ''} onChange={(e) => setEditingProduct({...editingProduct, sku: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Estado</label>
+            <select value={editingProduct.is_active || 'activo'} onChange={(e) => setEditingProduct({...editingProduct, is_active: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-emerald-400 font-bold">
+              <option value="activo">🟢 Activo</option>
+              <option value="inactivo">🔴 Inactivo</option>
+            </select>
+          </div>
+        </div>
 
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl shadow-sm space-y-4">
-                <h3 className="text-lg font-semibold text-white">Nueva Entrada de Inventario</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Proveedor</label>
-                    <select 
-                      value={selectedSupplier} 
-                      onChange={(e) => setSelectedSupplier(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="">Seleccionar Proveedor...</option>
-                      {suppliers.map(s => (
-                        <option key={s.id} value={s.id}>{s.name} ({s.rif || 'Sin RIF'})</option>
-                      ))}
-                    </select>
-                  </div>
+        {/* Fila 2: Costos, Precios e IVA */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-700/60">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Costo Actual ($)</label>
+            <input type="number" step="0.01" value={editingProduct.cost || 0} onChange={(e) => setEditingProduct({...editingProduct, cost: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-amber-400 font-bold" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Precio de Venta ($)</label>
+            <input type="number" step="0.01" value={editingProduct.price || 0} onChange={(e) => setEditingProduct({...editingProduct, price: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-emerald-400 font-bold" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">IVA (%)</label>
+            <input type="number" step="0.01" value={editingProduct.iva || 16} onChange={(e) => setEditingProduct({...editingProduct, iva: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+        </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">N° Factura / Control Proveedor</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ej: FACT-9908" 
-                      value={purchaseInvoiceNum}
-                      onChange={(e) => setPurchaseInvoiceNum(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </div>
+        {/* Fila 3: Clasificación Comercial */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Categoría</label>
+            <input type="text" value={editingProduct.category || ''} onChange={(e) => setEditingProduct({...editingProduct, category: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Marca</label>
+            <input type="text" value={editingProduct.brand || ''} onChange={(e) => setEditingProduct({...editingProduct, brand: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Fabricante</label>
+            <input type="text" value={editingProduct.manufacturer || ''} onChange={(e) => setEditingProduct({...editingProduct, manufacturer: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+        </div>
 
-                <div className="border-t border-slate-700 pt-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Producto</label>
-                    <select 
-                      value={purchaseProdId} 
-                      onChange={(e) => setPurchaseProdId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="">Seleccionar Producto...</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} (Stock Actual: {p.stock})</option>
-                      ))}
-                    </select>
-                  </div>
+        {/* Fila 4: Logística y Parámetros de Stock */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Unidad Medida</label>
+            <select value={editingProduct.unit_measure || 'Und'} onChange={(e) => setEditingProduct({...editingProduct, unit_measure: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white">
+              <option value="Und">Unidad (Und)</option>
+              <option value="Kg">Kilogramos (Kg)</option>
+              <option value="Litros">Litros (L)</option>
+              <option value="Caja">Caja</option>
+              <option value="Saco">Saco</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Peso Unit. (Kg)</label>
+            <input type="number" step="0.001" value={editingProduct.weight_per_unit || 0} onChange={(e) => setEditingProduct({...editingProduct, weight_per_unit: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Punto Reorden</label>
+            <input type="number" step="any" value={editingProduct.reorder_point || 5} onChange={(e) => setEditingProduct({...editingProduct, reorder_point: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Mín. Pedido</label>
+            <input type="number" step="any" value={editingProduct.min_order_qty || 1} onChange={(e) => setEditingProduct({...editingProduct, min_order_qty: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Máx. Pedido</label>
+            <input type="number" step="any" value={editingProduct.max_order_qty || 999999} onChange={(e) => setEditingProduct({...editingProduct, max_order_qty: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+        </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Cantidad Ingresada</label>
-                    <input 
-                      type="number" 
-                      placeholder="Ej: 50" 
-                      value={purchaseQty}
-                      onChange={(e) => setPurchaseQty(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
+        {/* Fila 5: Permisos Especiales */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-700/60">
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input type="checkbox" checked={editingProduct.allow_negative || false} onChange={(e) => setEditingProduct({...editingProduct, allow_negative: e.target.checked})} className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700" />
+            <span className="text-xs font-semibold text-white">Permitir facturar en negativo (Vender sin stock)</span>
+          </label>
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input type="checkbox" checked={editingProduct.allow_decimals || false} onChange={(e) => setEditingProduct({...editingProduct, allow_decimals: e.target.checked})} className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700" />
+            <span className="text-xs font-semibold text-white">Permitir Cantidades en Decimales</span>
+          </label>
+        </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Costo Unitario ($)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      placeholder="Ej: 12.50" 
-                      value={purchaseCost}
-                      onChange={(e) => setPurchaseCost(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-700">
+          <button type="button" onClick={() => setEditingProduct(null)} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs">Cancelar</button>
+          <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
 
-                  <button 
-                    onClick={addItemToPurchaseCart}
-                    type="button"
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors"
-                  >
-                    + Agregar Ítem
-                  </button>
-                </div>
-
-                {purchaseCart.length > 0 && (
-                  <div className="mt-4 border-t border-slate-700 pt-4">
-                    <table className="w-full text-left text-sm text-slate-300 mb-4">
-                      <thead className="text-xs uppercase bg-slate-900 text-slate-400">
-                        <tr>
-                          <th className="p-2.5">Producto</th>
-                          <th className="p-2.5">Cantidad</th>
-                          <th className="p-2.5">Costo Unit ($)</th>
-                          <th className="p-2.5">Subtotal ($)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {purchaseCart.map((item, idx) => (
-                          <tr key={idx} className="border-b border-slate-700">
-                            <td className="p-2.5">{item.name}</td>
-                            <td className="p-2.5">{item.quantity}</td>
-                            <td className="p-2.5">${item.unit_cost.toFixed(2)}</td>
-                            <td className="p-2.5">${(item.quantity * item.unit_cost).toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="text-lg font-bold text-white">
-                        Total Compra: ${purchaseCart.reduce((sum, i) => sum + (i.quantity * i.unit_cost), 0).toFixed(2)}
-                      </span>
-                      <button 
-                        onClick={handleRegisterPurchase}
-                        type="button"
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2.5 rounded-xl transition-colors shadow-sm"
-                      >
-                        Procesar Compra y Sumar Stock
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl shadow-sm space-y-4">
-                <h3 className="text-lg font-semibold text-white">Historial de Compras Recientes</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm text-slate-300">
-                    <thead className="text-xs uppercase bg-slate-900 text-slate-400">
-                      <tr>
-                        <th className="p-3">N° Factura</th>
-                        <th className="p-3">Proveedor</th>
-                        <th className="p-3">Monto ($)</th>
-                        <th className="p-3">Tasa Hist. (Bs)</th>
-                        <th className="p-3">Monto (Bs)</th>
-                        <th className="p-3">Fecha</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {purchases.map((p) => (
-                        <tr key={p.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                          <td className="p-3 font-mono text-blue-400">{p.supplier_invoice_number || 'N/A'}</td>
-                          <td className="p-3 font-medium text-white">{p.suppliers?.name || 'Proveedor General'}</td>
-                          <td className="p-3 font-bold text-emerald-400">${Number(p.total).toFixed(2)}</td>
-                          <td className="p-3">Bs. {Number(p.exchange_rate).toFixed(2)}</td>
-                          <td className="p-3">Bs. {(Number(p.total) * Number(p.exchange_rate)).toFixed(2)}</td>
-                          <td className="p-3 text-xs text-slate-400">{new Date(p.created_at).toLocaleDateString('es-VE')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+{showAddProductModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-4xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-slate-100">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+              <h3 className="text-lg font-bold text-white">📦 REGISTRAR NUEVO PRODUCTO (AVANZADO)</h3>
+              <button onClick={() => setShowAddProductModal(false)} className="text-slate-400 hover:text-white font-bold text-lg">✕</button>
             </div>
-          )}
 
+            <form onSubmit={handleAddProduct} className="space-y-4 text-sm">
+              {/* Fila 1: Información básica */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Nombre del Producto *</label>
+                  <input type="text" required placeholder="Ej: Harina de Maíz 1Kg" value={productName} onChange={(e) => setProductName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">SKU / Código</label>
+                  <input type="text" placeholder="PROD-001" value={productSku} onChange={(e) => setProductSku(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Estado</label>
+                  <select value={productStatus} onChange={(e) => setProductStatus(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-emerald-400 font-bold">
+                    <option value="activo">🟢 Activo</option>
+                    <option value="inactivo">🔴 Inactivo</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Fila 2: Precios, Costos e IVA */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-700/60">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Costo Actual ($) *</label>
+                  <input type="number" step="0.01" required placeholder="0.00" value={productCost} onChange={(e) => setProductCost(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-amber-400 font-bold" />
+                  <span className="text-[10px] text-slate-500 block mt-1">Se actualiza con compras</span>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Precio de Venta ($) *</label>
+                  <input type="number" step="0.01" required placeholder="0.00" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-emerald-400 font-bold" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">IVA (%)</label>
+                  <input type="number" step="0.01" value={productIva} onChange={(e) => setProductIva(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Stock Inicial *</label>
+                  <input type="number" step="any" required value={productStock} onChange={(e) => setProductStock(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-bold" />
+                </div>
+              </div>
+
+              {/* Fila 3: Clasificación Comercial */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Categoría</label>
+                  <input type="text" placeholder="Ej: Víveres, Licores" value={productCategory} onChange={(e) => setProductCategory(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Marca</label>
+                  <input type="text" placeholder="Ej: Primor, Polar" value={productBrand} onChange={(e) => setProductBrand(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Fabricante</label>
+                  <input type="text" placeholder="Nombre del fabricante" value={productManufacturer} onChange={(e) => setProductManufacturer(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+                </div>
+              </div>
+
+              {/* Fila 4: Logística, Unidades y Pedidos */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Unidad Medida</label>
+                  <select value={productUnit} onChange={(e) => setProductUnit(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white">
+                    <option value="Und">Unidad (Und)</option>
+                    <option value="Kg">Kilogramos (Kg)</option>
+                    <option value="Litros">Litros (L)</option>
+                    <option value="Caja">Caja</option>
+                    <option value="Saco">Saco</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Peso Unit. (Kg)</label>
+                  <input type="number" step="0.001" value={productWeight} onChange={(e) => setProductWeight(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Punto Reorden</label>
+                  <input type="number" step="any" value={productReorder} onChange={(e) => setProductReorder(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Mín. por Pedido</label>
+                  <input type="number" step="any" value={productMinOrder} onChange={(e) => setProductMinOrder(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Máx. por Pedido</label>
+                  <input type="number" step="any" value={productMaxOrder} onChange={(e) => setProductMaxOrder(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+                </div>
+              </div>
+
+              {/* Fila 5: Permisos Especiales */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-700/60">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input type="checkbox" checked={allowNegative} onChange={(e) => setAllowNegative(e.target.checked)} className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700" />
+                  <span className="text-xs font-semibold text-white">Permitir facturar en negativo (Vender sin stock)</span>
+                </label>
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input type="checkbox" checked={allowDecimals} onChange={(e) => setAllowDecimals(e.target.checked)} className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700" />
+                  <span className="text-xs font-semibold text-white">Permitir Cantidades en Decimales (Compras y Ventas)</span>
+                </label>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4 border-t border-slate-700">
+                <button type="button" onClick={() => setShowAddProductModal(false)} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs">Cancelar</button>
+                <button type="submit" disabled={loadingInv} className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs">
+                  {loadingInv ? 'Guardando...' : 'Guardar Producto'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+{currentView === 'purchases' && (
+  <div className="space-y-6">
+    <header className="flex justify-between items-center border-b border-slate-800 pb-4">
+      <div>
+        <h2 className="text-2xl font-bold text-white">Compras y Recepción de Mercancía</h2>
+        <p className="text-sm text-slate-400">Gestión de proveedores, entradas de inventario y control fiscal de facturas.</p>
+      </div>
+      <div className="flex gap-3">
+        <button 
+          onClick={() => setShowAddSupplierModal(true)} 
+          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all"
+        >
+          + Registrar Proveedor
+        </button>
+        <button 
+          onClick={() => setShowProcessPurchaseModal(true)} 
+          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all"
+        >
+          📦 Registrar Entrada de Mercancía
+        </button>
+      </div>
+    </header>
+
+    {/* Historial de Compras Recientes */}
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-sm">
+      <div className="p-4 border-b border-slate-700 font-bold text-white text-sm">
+        📜 Historial de Compras y Entradas de Inventario
+      </div>
+      <table className="w-full text-left border-collapse text-sm">
+        <thead>
+          <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+            <th className="p-4">Nº FACTURA</th>
+            <th className="p-4">PROVEEDOR</th>
+            <th className="p-4">MONTO ($)</th>
+            <th className="p-4">TASA BCV</th>
+            <th className="p-4">MONTO (BS.)</th>
+            <th className="p-4">FECHA</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-700/60 text-slate-300">
+          {purchasesHistory.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="p-8 text-center text-slate-400">
+                No hay compras o entradas registradas aún.
+              </td>
+            </tr>
+          ) : (
+            purchasesHistory.map((item: any) => (
+              <tr key={item.id} className="hover:bg-slate-700/20">
+                <td className="p-4 font-mono font-bold text-white">{item.invoice_number}</td>
+                <td className="p-4 font-semibold text-slate-200">{item.supplier_name}</td>
+                <td className="p-4 text-emerald-400 font-bold">${Number(item.total_amount || 0).toFixed(2)}</td>
+                <td className="p-4 font-mono text-xs text-slate-400">Bs. {item.bcv_rate}</td>
+                <td className="p-4 font-mono text-slate-300">Bs. {(Number(item.total_amount || 0) * Number(item.bcv_rate || currentRate)).toFixed(2)}</td>
+                <td className="p-4 text-xs text-slate-400">{new Date(item.created_at).toLocaleDateString()}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
+{showAddSupplierModal && (
+  <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 text-slate-100">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 className="text-lg font-bold text-white">🏢 Registrar Nuevo Proveedor</h3>
+        <button onClick={() => setShowAddSupplierModal(false)} className="text-slate-400 hover:text-white font-bold text-lg">✕</button>
+      </div>
+
+      <form onSubmit={handleAddSupplier} className="space-y-4 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Nombre / Empresa *</label>
+            <input type="text" required placeholder="Ej: Distribuidora C.A." value={supplierName} onChange={(e) => setSupplierName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">RIF / Documento *</label>
+            <input type="text" required placeholder="Ej: J-12345678-9" value={supplierRif} onChange={(e) => setSupplierRif(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Teléfono *</label>
+            <input type="text" required placeholder="Ej: 0414-1234567" value={supplierPhone} onChange={(e) => setSupplierPhone(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Persona Encargada</label>
+            <input type="text" placeholder="Ej: Lic. Carlos Pérez" value={supplierContact} onChange={(e) => setSupplierContact(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Dirección Fiscal *</label>
+            <input type="text" required placeholder="Ej: Zona Industrial, Calle 72, Maracaibo" value={supplierAddress} onChange={(e) => setSupplierAddress(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-700">
+          <button type="button" onClick={() => setShowAddSupplierModal(false)} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs">Cancelar</button>
+          <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs">Guardar Proveedor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
+{showProcessPurchaseModal && (
+  <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-4xl p-6 shadow-2xl space-y-4 text-slate-100 max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 className="text-lg font-bold text-white">📦 Registrar Factura de Compra y Múltiples Ítems</h3>
+        <button type="button" onClick={() => setShowProcessPurchaseModal(false)} className="text-slate-400 hover:text-white font-bold text-lg">✕</button>
+      </div>
+
+      <form onSubmit={handleProcessPurchase} className="space-y-4 text-sm">
+        {/* Cabecera de la Factura */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-700/60">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Proveedor *</label>
+            <select required value={purchaseSupplierId} onChange={(e) => setPurchaseSupplierId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-bold">
+              <option value="">Seleccionar proveedor...</option>
+              {suppliers.map((sup: any) => (
+                <option key={sup.id} value={sup.id}>{sup.name} (RIF: {sup.rif})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Nº Factura / Control *</label>
+            <input type="text" required placeholder="Ej: FACT-9908" value={purchaseInvoiceNum} onChange={(e) => setPurchaseInvoiceNum(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">IVA General (%)</label>
+            <input type="number" step="0.01" value={purchaseIva} onChange={(e) => setPurchaseIva(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-bold" />
+          </div>
+        </div>
+
+        {/* Carga de Productos al Carrito */}
+        <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
+          <h4 className="text-xs font-bold text-emerald-400 uppercase">Agregar Productos a la Factura</h4>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <div className="md:col-span-6">
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Producto</label>
+              <select value={tempProductId} onChange={(e) => setTempProductId(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white">
+                <option value="">Seleccionar producto...</option>
+                {products.map((prod: any) => (
+                  <option key={prod.id} value={prod.id}>{prod.name} (Stock: {prod.stock || 0})</option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Cantidad</label>
+              <input type="number" step="any" placeholder="Ej: 10" value={tempQty} onChange={(e) => setTempQty(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Costo Unit. ($)</label>
+              <input type="number" step="0.01" placeholder="Ej: 5.00" value={tempCost} onChange={(e) => setTempCost(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white" />
+            </div>
+            <div className="md:col-span-2">
+              <button type="button" onClick={handleAddItemToPurchase} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs">
+                + Agregar
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de Ítems */}
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="text-slate-400 border-b border-slate-800">
+                  <th className="p-2">PRODUCTO</th>
+                  <th className="p-2 text-center">CANTIDAD</th>
+                  <th className="p-2 text-right">COSTO UNIT. ($)</th>
+                  <th className="p-2 text-right">SUBTOTAL ($)</th>
+                  <th className="p-2 text-center">ACCIÓN</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {purchaseItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-4 text-center text-slate-500">No hay productos agregados a esta factura todavía.</td>
+                  </tr>
+                ) : (
+                  purchaseItems.map((item: any, index: number) => (
+                    <tr key={index}>
+                      <td className="p-2 font-bold text-white">{item.productName}</td>
+                      <td className="p-2 text-center font-mono">{item.qty}</td>
+                      <td className="p-2 text-right font-mono">${Number(item.cost).toFixed(2)}</td>
+                      <td className="p-2 text-right font-mono text-emerald-400">${(item.qty * item.cost).toFixed(2)}</td>
+                      <td className="p-2 text-center">
+                        <button type="button" onClick={() => handleRemovePurchaseItem(index)} className="text-rose-400 hover:text-rose-300 font-bold">✕</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Notas */}
+        <div>
+          <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Notas u Observaciones</label>
+          <textarea placeholder="Condiciones de pago, guía de despacho..." value={purchaseNotes} onChange={(e) => setPurchaseNotes(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white h-20 resize-none"></textarea>
+        </div>
+
+        {/* Total */}
+        <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
+          <div>
+            <span className="text-xs text-slate-400 block uppercase font-semibold">Total Factura (Subtotal + IVA {purchaseIva}%)</span>
+            <span className="text-2xl font-black text-emerald-400">
+              ${calculateTotalPurchaseAmount().toFixed(2)}
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="text-xs text-slate-400 block font-mono">Tasa BCV: Bs. {currentRate}</span>
+            <span className="text-sm font-bold text-slate-300 font-mono">
+              Bs. {(calculateTotalPurchaseAmount() * currentRate).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-700">
+          <button type="button" onClick={() => setShowProcessPurchaseModal(false)} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs">Cancelar</button>
+          <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs">Registrar Factura y Actualizar Stock</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
           {currentView === 'cxp' && (
             <div className="space-y-8">
               <header className="border-b border-slate-800 pb-4 flex justify-between items-center">
@@ -2438,201 +2996,204 @@ const handleAddClient = async (e: React.FormEvent) => {
             </div>
           )}
 
-          {currentView === 'payroll' && (
-            <div className="space-y-8">
-              <header className="border-b border-slate-800 pb-4">
-                <h2 className="text-2xl font-bold text-white">Gestión de Nómina y Personal</h2>
-                <p className="text-sm text-slate-400">Administra empleados, asignación de cargos, sueldos, comisiones y recibos de pago</p>
-              </header>
+{currentView === 'payroll' && (
+  <div className="space-y-6">
+    <header className="flex justify-between items-center border-b border-slate-800 pb-4">
+      <div>
+        <h2 className="text-2xl font-bold text-white">Nómina y Personal</h2>
+        <p className="text-sm text-slate-400">Gestión de colaboradores, sueldos y procesamiento de recibos de pago.</p>
+      </div>
+      <div className="flex gap-3">
+        <button 
+          onClick={() => setShowAddEmployeeModal(true)} 
+          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all"
+        >
+          + Registrar Empleado
+        </button>
+        <button 
+          onClick={() => setShowProcessPayrollModal(true)} 
+          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all"
+        >
+          💳 Procesar Pago de Nómina
+        </button>
+      </div>
+    </header>
 
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl space-y-4">
-                <h3 className="text-lg font-semibold text-white">Registrar Nuevo Empleado</h3>
-                <form 
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!tenant?.id) return;
-                    const { error } = await supabase.from('employees').insert([{ ...newEmp, tenant_id: tenant.id }]);
-                    if (!error) {
-                      alert('Empleado guardado con éxito');
-                      setNewEmp({ first_name: '', last_name: '', national_id: '', phone: '', position: '', base_salary: 0, payment_frequency: 'Quincenal' });
-                      fetchAllData(tenant.id);
-                    } else {
-                      alert('Error al guardar empleado: ' + error.message);
-                    }
-                  }}
-                  className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm"
-                >
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre</label>
-                    <input required type="text" value={newEmp.first_name} onChange={e => setNewEmp({...newEmp, first_name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="Ej: Juan" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Apellido</label>
-                    <input required type="text" value={newEmp.last_name} onChange={e => setNewEmp({...newEmp, last_name: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="Ej: Pérez" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">C.I. / Identificación</label>
-                    <input required type="text" value={newEmp.national_id} onChange={e => setNewEmp({...newEmp, national_id: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="Ej: V-12345678" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Cargo</label>
-                    <input required type="text" value={newEmp.position} onChange={e => setNewEmp({...newEmp, position: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="Ej: Vendedor / Encargado" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Sueldo Base ($)</label>
-                    <input required type="number" step="0.01" value={newEmp.base_salary} onChange={e => setNewEmp({...newEmp, base_salary: Number(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="150.00" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Frecuencia de Pago</label>
-                    <select value={newEmp.payment_frequency} onChange={e => setNewEmp({...newEmp, payment_frequency: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
-                      <option value="Semanal">Semanal</option>
-                      <option value="Quincenal">Quincenal</option>
-                      <option value="Mensual">Mensual</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-3 flex justify-end">
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-2 rounded-lg transition-colors">
-                      + Guardar Empleado
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl space-y-4">
-                <h3 className="text-lg font-semibold text-white">Procesar Recibo de Pago de Nómina</h3>
-                <form 
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!tenant?.id || !newPayrollPay.employee_id) return alert('Selecciona un empleado');
-                    
-                    const totalNeto = (Number(newPayrollPay.base_salary_paid) + Number(newPayrollPay.bonuses) + Number(newPayrollPay.commissions)) - Number(newPayrollPay.deductions);
-                    
-                    const empObj = employees.find(emp => emp.id === newPayrollPay.employee_id);
-                    const empName = empObj ? `${empObj.first_name} ${empObj.last_name}` : 'Empleado';
-
-                    const { error } = await supabase.from('payroll_payments').insert([{
-                      tenant_id: tenant.id,
-                      employee_id: newPayrollPay.employee_id,
-                      employee_name: empName,
-                      role_description: empObj?.position || 'N/A',
-                      amount: totalNeto,
-                      exchange_rate: currentRate,
-                      payment_period: newPayrollPay.payment_period || 'Pago Regular',
-                      base_salary_paid: newPayrollPay.base_salary_paid,
-                      bonuses: newPayrollPay.bonuses,
-                      commissions: newPayrollPay.commissions,
-                      deductions: newPayrollPay.deductions,
-                      payment_method: newPayrollPay.payment_method
-                    }]);
-
-                    if (!error) {
-                      alert('¡Pago de nómina procesado con éxito!');
-                      setNewPayrollPay({ employee_id: '', base_salary_paid: 0, bonuses: 0, commissions: 0, deductions: 0, payment_period: '', payment_method: 'Transferencia' });
-                      fetchAllData(tenant.id);
-                    } else {
-                      alert('Error al registrar pago: ' + error.message);
-                    }
-                  }}
-                  className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm"
-                >
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Empleado</label>
-                    <select 
-                      value={newPayrollPay.employee_id} 
-                      onChange={e => {
-                        const selectedEmp = employees.find(emp => emp.id === e.target.value);
-                        setNewPayrollPay({
-                          ...newPayrollPay, 
-                          employee_id: e.target.value,
-                          base_salary_paid: selectedEmp ? selectedEmp.base_salary : 0
-                        });
-                      }} 
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white"
-                    >
-                      <option value="">Seleccionar Empleado...</option>
-                      {employees.map(emp => (
-                        <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name} - {emp.position} (${emp.base_salary})</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Sueldo Base a Pagar ($)</label>
-                    <input type="number" step="0.01" value={newPayrollPay.base_salary_paid} onChange={e => setNewPayrollPay({...newPayrollPay, base_salary_paid: Number(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Bonos / Incentivos ($)</label>
-                    <input type="number" step="0.01" value={newPayrollPay.bonuses} onChange={e => setNewPayrollPay({...newPayrollPay, bonuses: Number(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Comisiones por Ventas ($)</label>
-                    <input type="number" step="0.01" value={newPayrollPay.commissions} onChange={e => setNewPayrollPay({...newPayrollPay, commissions: Number(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1 text-rose-400">Deducciones / Adelantos ($)</label>
-                    <input type="number" step="0.01" value={newPayrollPay.deductions} onChange={e => setNewPayrollPay({...newPayrollPay, deductions: Number(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-rose-300 font-bold" />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Período / Detalle</label>
-                    <input type="text" value={newPayrollPay.payment_period} onChange={e => setNewPayrollPay({...newPayrollPay, payment_period: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white" placeholder="Ej: 1era Quincena Octubre 2026" />
-                  </div>
-
-                  <div className="md:col-span-3 bg-slate-900 p-4 rounded-lg border border-slate-700 flex justify-between items-center">
-                    <div>
-                      <span className="text-xs text-slate-400 block">Monto Neto a Transferir / Entregar</span>
-                      <span className="text-2xl font-bold text-emerald-400">
-                        ${((Number(newPayrollPay.base_salary_paid) + Number(newPayrollPay.bonuses) + Number(newPayrollPay.commissions)) - Number(newPayrollPay.deductions)).toFixed(2)}
-                      </span>
-                      <span className="text-xs text-slate-400 ml-3">
-                        (Bs. {(((Number(newPayrollPay.base_salary_paid) + Number(newPayrollPay.bonuses) + Number(newPayrollPay.commissions)) - Number(newPayrollPay.deductions)) * currentRate).toFixed(2)})
-                      </span>
-                    </div>
-                    <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors">
-                      Procesar Pago de Nómina
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl space-y-4">
-                <h3 className="text-lg font-semibold text-white">Historial de Recibos y Pagos de Nómina</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm text-slate-300">
-                    <thead className="text-xs uppercase bg-slate-900 text-slate-400">
-                      <tr>
-                        <th className="p-3">Empleado</th>
-                        <th className="p-3">Cargo</th>
-                        <th className="p-3">Sueldo ($)</th>
-                        <th className="p-3">Bonos/Comis. ($)</th>
-                        <th className="p-3 text-rose-400">Deducción ($)</th>
-                        <th className="p-3">Neto Pagado ($)</th>
-                        <th className="p-3">Período</th>
-                        <th className="p-3">Fecha</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {payroll.map((pay) => (
-                        <tr key={pay.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                          <td className="p-3 font-medium text-white">{pay.employee_name}</td>
-                          <td className="p-3 text-slate-400">{pay.role_description}</td>
-                          <td className="p-3">${Number(pay.base_salary_paid || 0).toFixed(2)}</td>
-                          <td className="p-3 text-emerald-400">+${(Number(pay.bonuses || 0) + Number(pay.commissions || 0)).toFixed(2)}</td>
-                          <td className="p-3 text-rose-400">-${Number(pay.deductions || 0).toFixed(2)}</td>
-                          <td className="p-3 font-bold text-white">${Number(pay.amount).toFixed(2)}</td>
-                          <td className="p-3 text-xs text-slate-400">{pay.payment_period}</td>
-                          <td className="p-3 text-xs text-slate-400">{new Date(pay.created_at).toLocaleDateString('es-VE')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+    {/* Historial de Recibos y Pagos de Nómina */}
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-sm">
+      <div className="p-4 border-b border-slate-700 font-bold text-white text-sm">
+        📜 Historial de Recibos y Pagos Emitidos
+      </div>
+      <table className="w-full text-left border-collapse text-sm">
+        <thead>
+          <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+            <th className="p-4">EMPLEADO</th>
+            <th className="p-4">PERÍODO / DETALLE</th>
+            <th className="p-4">BANCO / MÉTODO</th>
+            <th className="p-4">MONTO NETO ($)</th>
+            <th className="p-4">MONTO NETO (BS.)</th>
+            <th className="p-4">FECHA</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-700/60 text-slate-300">
+          {payrollHistory.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="p-8 text-center text-slate-400">
+                No hay recibos de nómina procesados aún.
+              </td>
+            </tr>
+          ) : (
+            payrollHistory.map((item: any) => (
+              <tr key={item.id} className="hover:bg-slate-700/20">
+                <td className="p-4 font-bold text-white">{item.employee_name}</td>
+                <td className="p-4 text-slate-300">{item.period}</td>
+                <td className="p-4 font-semibold text-blue-400">{item.bank_name || 'Efectivo / Divisas'}</td>
+                <td className="p-4 text-emerald-400 font-bold">${Number(item.net_amount || 0).toFixed(2)}</td>
+                <td className="p-4 font-mono text-slate-300">Bs. {(Number(item.net_amount || 0) * currentRate).toFixed(2)}</td>
+                <td className="p-4 text-xs text-slate-400">{new Date(item.created_at).toLocaleDateString()}</td>
+              </tr>
+            ))
           )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
+
+{showAddEmployeeModal && (
+  <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 text-slate-100">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 className="text-lg font-bold text-white">👤 Registrar Nuevo Empleado</h3>
+        <button onClick={() => setShowAddEmployeeModal(false)} className="text-slate-400 hover:text-white font-bold text-lg">✕</button>
+      </div>
+
+      <form onSubmit={handleAddEmployee} className="space-y-4 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Nombre *</label>
+            <input type="text" required placeholder="Ej: Juan" value={employeeName} onChange={(e) => setEmployeeName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Apellido *</label>
+            <input type="text" required placeholder="Ej: Pérez" value={employeeLastName} onChange={(e) => setEmployeeLastName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">C.I. / Identificación *</label>
+            <input type="text" required placeholder="Ej: V-12345678" value={employeeCi} onChange={(e) => setEmployeeCi(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Cargo *</label>
+            <input type="text" required placeholder="Ej: Vendedor / Encargado" value={employeeRole} onChange={(e) => setEmployeeRole(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Sueldo Base ($) *</label>
+            <input type="number" step="0.01" required value={employeeSalary} onChange={(e) => setEmployeeSalary(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-amber-400 font-bold" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Frecuencia de Pago</label>
+            <select value={employeeFrequency} onChange={(e) => setEmployeeFrequency(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white">
+              <option value="Quincenal">Quincenal</option>
+              <option value="Semanal">Semanal</option>
+              <option value="Mensual">Mensual</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-700">
+          <button type="button" onClick={() => setShowAddEmployeeModal(false)} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs">Cancelar</button>
+          <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs">Guardar Empleado</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
+{/* 💳 MODAL: PROCESAR RECIBO DE PAGO DE NÓMINA (CON BANCO EMISOR) */}
+{showProcessPayrollModal && (
+  <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-3xl p-6 shadow-2xl space-y-4 text-slate-100">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 className="text-lg font-bold text-white">💳 Procesar Recibo de Pago de Nómina</h3>
+        <button onClick={() => setShowProcessPayrollModal(false)} className="text-slate-400 hover:text-white font-bold text-lg">✕</button>
+      </div>
+
+      <form onSubmit={handleProcessPayroll} className="space-y-4 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Seleccionar Empleado *</label>
+            <select 
+              required 
+              value={payrollEmployeeId} 
+              onChange={(e) => handleSelectEmployeeForPayroll(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-bold"
+            >
+              <option value="">Seleccione un empleado...</option>
+              {employees.map((emp: any) => (
+                <option key={emp.id} value={emp.id}>{emp.name} {emp.last_name} - {emp.role}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Sueldo Base a Pagar ($)</label>
+            <input type="number" step="0.01" value={payrollBaseSalary} onChange={(e) => setPayrollBaseSalary(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-bold" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Bonos / Incentivos ($)</label>
+            <input type="number" step="0.01" value={payrollBonuses} onChange={(e) => setPayrollBonuses(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-emerald-400 font-bold" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Comisiones por Ventas ($)</label>
+            <input type="number" step="0.01" value={payrollCommissions} onChange={(e) => setPayrollCommissions(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-blue-400 font-bold" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Deducciones / Adelantos ($)</label>
+            <input type="number" step="0.01" value={payrollDeductions} onChange={(e) => setPayrollDeductions(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-rose-400 font-bold" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Período / Detalle *</label>
+            <input type="text" required placeholder="Ej: 1era Quincena Octubre 2026" value={payrollPeriod} onChange={(e) => setPayrollPeriod(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Banco / Método de Pago *</label>
+            <select required value={payrollBank} onChange={(e) => setPayrollBank(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-amber-400 font-bold">
+              <option value="">Seleccione banco o método...</option>
+              <option value="Banesco (Pago Móvil / Transferencia)">Banesco</option>
+              <option value="Banco Mercantil">Banco Mercantil</option>
+              <option value="Banco de Venezuela">Banco de Venezuela</option>
+              <option value="BNC (Banco Nacional de Crédito)">BNC</option>
+              <option value="Divisas en Efectivo ($)">Divisas en Efectivo ($)</option>
+              <option value="Zelle">Zelle</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Resumen del Neto a Pagar */}
+        <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
+          <div>
+            <span className="text-xs text-slate-400 block uppercase font-semibold">Monto Neto a Transferir / Entregar</span>
+            <span className="text-2xl font-black text-emerald-400">
+              ${(Number(payrollBaseSalary || 0) + Number(payrollBonuses || 0) + Number(payrollCommissions || 0) - Number(payrollDeductions || 0)).toFixed(2)}
+            </span>
+          </div>
+          <div className="text-right">
+            <span className="text-xs text-slate-400 block font-mono">Tasa BCV: Bs. {currentRate}</span>
+            <span className="text-sm font-bold text-slate-300 font-mono">
+              Bs. {((Number(payrollBaseSalary || 0) + Number(payrollBonuses || 0) + Number(payrollCommissions || 0) - Number(payrollDeductions || 0)) * currentRate).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-700">
+          <button type="button" onClick={() => setShowProcessPayrollModal(false)} className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs">Cancelar</button>
+          <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs">Procesar y Emitir Pago</button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
 
 {currentView === 'clients' && (
             <>
@@ -2641,99 +3202,17 @@ const handleAddClient = async (e: React.FormEvent) => {
                   <h2 className="text-2xl font-bold text-white">Clientes</h2>
                   <p className="text-sm text-slate-400">Directorio de clientes y asignación de vendedores.</p>
                 </div>
-                <button onClick={handleExportClients} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm">
-                  📊 Exportar Clientes
-                </button>
+
               </header>
 
               {/* Formulario de Registro */}
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl mb-8 shadow-sm">
-                <h3 className="text-lg font-semibold text-white mb-4">Registrar Nuevo Cliente</h3>
-                <form onSubmit={handleAddClient} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Código Único</label>
-                    <input
-                      type="text"
-                      placeholder={`Ej: CLI-${(clients.length + 1).toString().padStart(4, '0')}`}
-                      value={clientCode}
-                      onChange={(e) => setClientCode(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre / Razon Social</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Cliente C.A."
-                      value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">RIF / DNI</label>
-                    <input
-                      type="text"
-                      placeholder="J-12345678-9"
-                      value={clientDoc}
-                      onChange={(e) => setClientDoc(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Vendedor Asignado</label>
-                    <select
-                      value={assignedSellerId}
-                      onChange={(e) => setAssignedSellerId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="">-- Sin Asignar --</option>
-                      {sellers.map((s) => (
-                        <option key={s.id} value={s.id}>{s.full_name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Correo</label>
-                    <input
-                      type="email"
-                      placeholder="correo@cliente.com"
-                      value={clientEmail}
-                      onChange={(e) => setClientEmail(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Teléfono</label>
-                    <input
-                      type="text"
-                      placeholder="0414-0000000"
-                      value={clientPhone}
-                      onChange={(e) => setClientPhone(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Dirección</label>
-                    <input
-                      type="text"
-                      placeholder="Dirección fiscal o comercial"
-                      value={clientAddress}
-                      onChange={(e) => setClientAddress(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <div className="flex items-end md:col-span-4 justify-end">
-                    <button
-                      type="submit"
-                      disabled={loadingClient}
-                      className="bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 px-6 rounded-lg text-sm transition-colors disabled:opacity-50"
-                    >
-                      {loadingClient ? 'Guardando...' : '+ Registrar Cliente'}
-                    </button>
-                  </div>
-                </form>
+              <div className="bg-slate-900 border border-slate-900 p-6 rounded-xl mb-8 shadow-sm">
+<button
+  onClick={() => setShowAddClientModal(true)} // <-- Esto es obligatorio para que abra el modal
+  className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2.5 rounded-xl transition-all shadow-lg flex items-center space-x-2"
+>
+  <span>+ Nuevo Cliente</span>
+</button>
               </div>
 
               {/* Tabla de Clientes */}
@@ -2778,6 +3257,199 @@ const handleAddClient = async (e: React.FormEvent) => {
                   </tbody>
                 </table>
               </div>
+{showAddClientModal && (
+  <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-slate-100">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 className="text-lg font-bold text-white">REGISTRAR NUEVO CLIENTE PROFESIONAL</h3>
+        <button onClick={() => setShowAddClientModal(false)} className="text-slate-400 hover:text-white font-bold text-lg">✕</button>
+      </div>
+
+      <form onSubmit={handleAddClient} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Código Único</label>
+            <input 
+              type="text" 
+              placeholder="CLI-0001" 
+              value={clientCode} 
+              onChange={(e) => setClientCode(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono text-sm" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Nombre / Razón Social *</label>
+            <input 
+              type="text" 
+              required 
+              placeholder="Comercial C.A." 
+              value={clientName} 
+              onChange={(e) => setClientName(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-sm" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">RIF / DNI *</label>
+            <input 
+              type="text" 
+              required 
+              placeholder="J-12345678-9" 
+              value={clientDoc} 
+              onChange={(e) => setClientDoc(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-sm" 
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">📍 Ruta de Reparto *</label>
+            <input 
+              type="text" 
+              required 
+              placeholder="Ej: Ruta Norte" 
+              value={clientRoute} 
+              onChange={(e) => setClientRoute(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-emerald-400 font-bold text-sm" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Vendedor Asignado</label>
+            <select 
+              value={assignedSellerId} 
+              onChange={(e) => setAssignedSellerId(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-sm"
+            >
+              <option value="">-- Sin Asignar --</option>
+              {sellers.map((s) => (<option key={s.id} value={s.id}>{s.full_name}</option>))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">🗺️ Coordenadas / GPS</label>
+            <input 
+              type="text" 
+              placeholder="Enlace o coordenadas" 
+              value={clientGps} 
+              onChange={(e) => setClientGps(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-sm" 
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">💳 Límite de Crédito ($ USD)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              value={clientCreditLimit} 
+              onChange={(e) => setClientCreditLimit(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-amber-400 font-bold text-sm" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">📉 Mínimo de Compra Mensual ($ USD)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              value={clientMinSales} 
+              onChange={(e) => setClientMinSales(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-blue-400 font-bold text-sm" 
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-700">
+          <button 
+            type="button" 
+            onClick={() => setShowAddClientModal(false)} 
+            className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit" 
+            disabled={loadingClient} 
+            className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs"
+          >
+            {loadingClient ? 'Guardando...' : 'Guardar Cliente'}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+
+{currentView === 'inventory' && (
+  <div className="space-y-6">
+    <header className="flex justify-between items-center border-b border-slate-800 pb-4">
+      <div>
+        <h2 className="text-2xl font-bold text-white">Gestión de Inventario</h2>
+        <p className="text-sm text-slate-400">Control avanzado de productos, existencias, costos y márgenes.</p>
+      </div>
+      <div className="flex gap-3">
+        <button 
+          onClick={handleExportInventory} 
+          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
+        >
+          📊 Exportar Inventario
+        </button>
+        <button 
+          onClick={() => setShowAddProductModal(true)} 
+          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all"
+        >
+          + Agregar Producto
+        </button>
+      </div>
+    </header>
+
+    {/* Tabla de Inventario limpia y sin formularios estáticos encima */}
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-sm">
+      <table className="w-full text-left border-collapse text-sm">
+        <thead>
+          <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
+            <th className="p-4">PRODUCTO</th>
+            <th className="p-4">SKU</th>
+            <th className="p-4">CATEGORÍA</th>
+            <th className="p-4">COSTO ($)</th>
+            <th className="p-4">PRECIO ($)</th>
+            <th className="p-4">PRECIO (BS.)</th>
+            <th className="p-4">STOCK</th>
+            <th className="p-4">ESTADO</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-700/60 text-slate-300">
+          {products.length === 0 ? (
+            <tr>
+              <td colSpan={8} className="p-8 text-center text-slate-400">
+                No hay productos registrados en el inventario.
+              </td>
+            </tr>
+          ) : (
+            products.map((p) => (
+              <tr key={p.id} className="hover:bg-slate-700/20">
+                <td className="p-4 font-bold text-white">{p.name}</td>
+                <td className="p-4 font-mono text-slate-400">{p.sku || 'N/A'}</td>
+                <td className="p-4 text-xs font-semibold uppercase">{p.category || 'General'}</td>
+                <td className="p-4 text-amber-400 font-semibold">${Number(p.cost || 0).toFixed(2)}</td>
+                <td className="p-4 text-emerald-400 font-semibold">${Number(p.price).toFixed(2)}</td>
+                <td className="p-4 font-mono text-slate-300">Bs. {(Number(p.price) * currentRate).toFixed(2)}</td>
+                <td className="p-4 font-bold text-white">{p.stock} {p.unit_measure || 'Und'}</td>
+                <td className="p-4">
+                  <span className={`px-2.5 py-1 text-xs font-bold rounded-full uppercase ${p.is_active === 'inactivo' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                    {p.is_active || 'activo'}
+                  </span>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
+
 
               {/* Modal de Modificación de Cliente */}
               {editingClient && (
@@ -2886,6 +3558,129 @@ const handleAddClient = async (e: React.FormEvent) => {
                   </div>
                 </div>
               )}
+
+{showAddClientModal && (
+  <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-slate-100">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 className="text-lg font-bold text-white">REGISTRAR NUEVO CLIENTE PROFESIONAL</h3>
+        <button onClick={() => setShowAddClientModal(false)} className="text-slate-400 hover:text-white font-bold text-lg">✕</button>
+      </div>
+
+      <form onSubmit={handleAddClient} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Código Único</label>
+            <input 
+              type="text" 
+              placeholder="CLI-0001" 
+              value={clientCode} 
+              onChange={(e) => setClientCode(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono text-sm" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Nombre / Razón Social *</label>
+            <input 
+              type="text" 
+              required 
+              placeholder="Comercial C.A." 
+              value={clientName} 
+              onChange={(e) => setClientName(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-sm" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">RIF / DNI *</label>
+            <input 
+              type="text" 
+              required 
+              placeholder="J-12345678-9" 
+              value={clientDoc} 
+              onChange={(e) => setClientDoc(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-sm" 
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">📍 Ruta de Reparto *</label>
+            <input 
+              type="text" 
+              required 
+              placeholder="Ej: Ruta Norte" 
+              value={clientRoute} 
+              onChange={(e) => setClientRoute(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-emerald-400 font-bold text-sm" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Vendedor Asignado</label>
+            <select 
+              value={assignedSellerId} 
+              onChange={(e) => setAssignedSellerId(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-sm"
+            >
+              <option value="">-- Sin Asignar --</option>
+              {sellers.map((s) => (<option key={s.id} value={s.id}>{s.full_name}</option>))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">🗺️ Coordenadas / GPS</label>
+            <input 
+              type="text" 
+              placeholder="Enlace o coordenadas" 
+              value={clientGps} 
+              onChange={(e) => setClientGps(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white text-sm" 
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">💳 Límite de Crédito ($ USD)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              value={clientCreditLimit} 
+              onChange={(e) => setClientCreditLimit(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-amber-400 font-bold text-sm" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-300 uppercase mb-1">📉 Mínimo de Compra Mensual ($ USD)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              value={clientMinSales} 
+              onChange={(e) => setClientMinSales(e.target.value)} 
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-blue-400 font-bold text-sm" 
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-700">
+          <button 
+            type="button" 
+            onClick={() => setShowAddClientModal(false)} 
+            className="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl text-xs"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit" 
+            disabled={loadingClient} 
+            className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs"
+          >
+            {loadingClient ? 'Guardando...' : 'Guardar Cliente'}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
             </>
           )}
 
@@ -3467,6 +4262,7 @@ const handleAddClient = async (e: React.FormEvent) => {
           </button>
         </form>
       </div>
+
     </main>
   );
 }
