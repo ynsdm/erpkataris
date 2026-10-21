@@ -210,6 +210,12 @@ const handleCreateSeller = async (e: React.FormEvent) => {
       if (session) fetchUserData(session.user.id);
     });
 
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchUserData(session.user.id);
+    });
+
 useEffect(() => {
     if (profile && profile.role) {
       const userRole = String(profile.role).toLowerCase().trim();
@@ -218,13 +224,6 @@ useEffect(() => {
       }
     }
   }, [profile]);
-
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) fetchUserData(session.user.id);
-    });
-
     return () => subscription.unsubscribe();
   }, []);
 
