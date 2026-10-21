@@ -220,15 +220,6 @@ useEffect(() => {
     }
   }, [profile]);
 
-useEffect(() => {
-  if (profile) {
-    const userRole = (profile.role || '').toLowerCase().trim();
-    if (userRole === 'seller' || userRole === 'vendedor') {
-      window.location.href = '/pos';
-    }
-  }
-}, [profile]);
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) fetchUserData(session.user.id);
@@ -1354,7 +1345,7 @@ const handleAddClient = async (e: React.FormEvent) => {
                       <div>
                         <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Cuota Mensual Inicial ($ USD)</label>
                         <input
-                          type="number"g
+                          type="number"
                           step="0.01"
                           required
                           value={newSellerQuota}
