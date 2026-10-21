@@ -56,7 +56,7 @@ const handleAddSupplier = async (e: React.FormEvent) => {
   }
 };
 
-const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
+const [purchaseItems, setPurchaseItems] = useState<Array<any>>([]);
   const [tempProductId, setTempProductId] = useState('');
   const [tempQty, setTempQty] = useState('');
   const [tempCost, setTempCost] = useState('');
@@ -3379,76 +3379,6 @@ const handleAddClient = async (e: React.FormEvent) => {
     </div>
   </div>
 )}
-
-{currentView === 'inventory' && (
-  <div className="space-y-6">
-    <header className="flex justify-between items-center border-b border-slate-800 pb-4">
-      <div>
-        <h2 className="text-2xl font-bold text-white">Gestión de Inventario</h2>
-        <p className="text-sm text-slate-400">Control avanzado de productos, existencias, costos y márgenes.</p>
-      </div>
-      <div className="flex gap-3">
-        <button 
-          onClick={handleExportInventory} 
-          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
-        >
-          📊 Exportar Inventario
-        </button>
-        <button 
-          onClick={() => setShowAddProductModal(true)} 
-          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg transition-all"
-        >
-          + Agregar Producto
-        </button>
-      </div>
-    </header>
-
-    {/* Tabla de Inventario limpia y sin formularios estáticos encima */}
-    <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-sm">
-      <table className="w-full text-left border-collapse text-sm">
-        <thead>
-          <tr className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
-            <th className="p-4">PRODUCTO</th>
-            <th className="p-4">SKU</th>
-            <th className="p-4">CATEGORÍA</th>
-            <th className="p-4">COSTO ($)</th>
-            <th className="p-4">PRECIO ($)</th>
-            <th className="p-4">PRECIO (BS.)</th>
-            <th className="p-4">STOCK</th>
-            <th className="p-4">ESTADO</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-700/60 text-slate-300">
-          {products.length === 0 ? (
-            <tr>
-              <td colSpan={8} className="p-8 text-center text-slate-400">
-                No hay productos registrados en el inventario.
-              </td>
-            </tr>
-          ) : (
-            products.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-700/20">
-                <td className="p-4 font-bold text-white">{p.name}</td>
-                <td className="p-4 font-mono text-slate-400">{p.sku || 'N/A'}</td>
-                <td className="p-4 text-xs font-semibold uppercase">{p.category || 'General'}</td>
-                <td className="p-4 text-amber-400 font-semibold">${Number(p.cost || 0).toFixed(2)}</td>
-                <td className="p-4 text-emerald-400 font-semibold">${Number(p.price).toFixed(2)}</td>
-                <td className="p-4 font-mono text-slate-300">Bs. {(Number(p.price) * currentRate).toFixed(2)}</td>
-                <td className="p-4 font-bold text-white">{p.stock} {p.unit_measure || 'Und'}</td>
-                <td className="p-4">
-                  <span className={`px-2.5 py-1 text-xs font-bold rounded-full uppercase ${p.is_active === 'inactivo' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
-                    {p.is_active || 'activo'}
-                  </span>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  </div>
-)}
-
 
 
               {/* Modal de Modificación de Cliente */}
