@@ -21,6 +21,7 @@ export default function Home() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
+const [currentView, setCurrentView] = useState<string>('dashboard');
 
 const [clientCode, setClientCode] = useState('');
 const [editingClient, setEditingClient] = useState<any | null>(null);
@@ -211,11 +212,22 @@ const handleCreateSeller = async (e: React.FormEvent) => {
     });
 
 useEffect(() => {
-    // Verificar si el usuario autenticado tiene rol de vendedor
-    if (profile && (profile.role === 'seller' || profile.role === 'vendedor')) {
-      window.location.href = '/pos';
+    if (profile) {
+      const userRole = (profile.role || '').toLowerCase().trim();
+      if (userRole === 'seller' || userRole === 'vendedor') {
+        window.location.href = '/pos';
+      }
     }
   }, [profile]);
+
+useEffect(() => {
+  if (profile) {
+    const userRole = (profile.role || '').toLowerCase().trim();
+    if (userRole === 'seller' || userRole === 'vendedor') {
+      window.location.href = '/pos';
+    }
+  }
+}, [profile]);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
