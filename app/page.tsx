@@ -211,13 +211,14 @@ const handleCreateSeller = async (e: React.FormEvent) => {
     });
 
 useEffect(() => {
-    if (profile) {
-      const userRole = (profile.role || '').toLowerCase().trim();
+    if (profile && profile.role) {
+      const userRole = String(profile.role).toLowerCase().trim();
       if (userRole === 'seller' || userRole === 'vendedor') {
-        window.location.href = '/pos';
+        window.location.replace('/pos');
       }
     }
   }, [profile]);
+
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
