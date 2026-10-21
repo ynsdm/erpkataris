@@ -56,10 +56,12 @@ const handleAddSupplier = async (e: React.FormEvent) => {
   }
 };
 
-const [purchaseItems, setPurchaseItems] = useState<Array<any>>([]);
-  const [tempProductId, setTempProductId] = useState('');
-  const [tempQty, setTempQty] = useState('');
-  const [tempCost, setTempCost] = useState('');
+const [purchaseItems, setPurchaseItems] = useState<Array<{
+  productId: string;
+  productName: string;
+  qty: number;
+  cost: number;
+}>>([]);
 
   // --- FUNCIONES LÓGICAS DE COMPRAS ---
   const handleAddItemToPurchase = () => {
