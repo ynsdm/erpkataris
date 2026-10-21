@@ -216,6 +216,10 @@ const handleCreateSeller = async (e: React.FormEvent) => {
       if (session) fetchUserData(session.user.id);
     });
 
+    return () => subscription.unsubscribe();
+  }, []);
+
+
 useEffect(() => {
     if (profile && profile.role) {
       const userRole = String(profile.role).toLowerCase().trim();
@@ -224,8 +228,6 @@ useEffect(() => {
       }
     }
   }, [profile]);
-    return () => subscription.unsubscribe();
-  }, []);
 
   const fetchUserData = async (userId: string) => {
     try {
