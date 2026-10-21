@@ -62,6 +62,7 @@ const [purchaseItems, setPurchaseItems] = useState<Array<{
   qty: number;
   cost: number;
 }>>([]);
+
 const [tempProductId, setTempProductId] = useState('');
 const [tempQty, setTempQty] = useState('');
 const [tempCost, setTempCost] = useState('');
