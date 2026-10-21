@@ -21,7 +21,6 @@ export default function Home() {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
-const [currentView, setCurrentView] = useState<string>('dashboard');
 
 const [clientCode, setClientCode] = useState('');
 const [editingClient, setEditingClient] = useState<any | null>(null);
