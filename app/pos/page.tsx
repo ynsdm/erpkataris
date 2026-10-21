@@ -20,6 +20,19 @@ export default function POSPage() {
   const [myClients, setMyClients] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
 
+  // Filtros y Búsqueda de Clientes
+  const [clientSearch, setClientSearch] = useState('');
+  const [selectedRouteFilter, setSelectedRouteFilter] = useState('ALL');
+
+  // Modal de Nuevo Cliente (con Ruta)
+  const [showNewClientModal, setShowNewClientModal] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientDoc, setNewClientDoc] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [newClientAddress, setNewClientAddress] = useState('');
+  const [newClientRoute, setNewClientRoute] = useState('Ruta Principal');
+  const [loadingClient, setLoadingClient] = useState(false);
+
   // Modal / Carrito de Nuevo Pedido
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -28,6 +41,9 @@ export default function POSPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [itemQty, setItemQty] = useState(1);
   const [loadingOrder, setLoadingOrder] = useState(false);
+
+  // Estado para impresión de Ticket 80mm
+  const [ticketData, setTicketData] = useState<any>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -45,7 +61,6 @@ export default function POSPage() {
 
   const fetchPOSData = async (userId: string) => {
     try {
-      // 1. Perfil y Tenant
       const { data: profData } = await supabase
         .from('profiles')
         .select('*, tenants(*)')
@@ -58,7 +73,7 @@ export default function POSPage() {
 
         const tenantId = profData.tenant_id;
 
-// 2. Mis Facturas / Pedidos (Cargadas de forma directa)
+        // Facturas / Pedidos
         const { data: invData } = await supabase
           .from('invoices')
           .select('*, clients(*)')
@@ -66,12 +81,11 @@ export default function POSPage() {
           .order('created_at', { ascending: false });
 
         if (invData) {
-          // Filtramos en memoria para asegurarnos de ver las tuyas o las generales
           const filtered = invData.filter((inv: any) => inv.seller_id === userId || inv.created_by === userId || !inv.seller_id);
           setMyInvoices(filtered);
         }
 
-        // 3. Mis Clientes Asignados
+        // Clientes Asignados
         const { data: cliData } = await supabase
           .from('clients')
           .select('*')
@@ -81,7 +95,7 @@ export default function POSPage() {
 
         if (cliData) setMyClients(cliData);
 
-        // 4. Catálogo de Productos
+        // Productos
         const { data: prodData } = await supabase
           .from('products')
           .select('*')
@@ -97,6 +111,44 @@ export default function POSPage() {
   };
 
   const currentRate = Number(tenant?.exchange_rate || 36.00);
+
+  // Registrar Nuevo Cliente con Ruta
+  const handleCreateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile?.tenant_id) return;
+    setLoadingClient(true);
+
+    try {
+      const generatedCode = `CLI-${(myClients.length + 1).toString().padStart(4, '0')}`;
+      const { error } = await supabase.from('clients').insert([
+        {
+          tenant_id: profile.tenant_id,
+          client_code: generatedCode,
+          name: newClientName,
+          document_id: newClientDoc,
+          phone: newClientPhone,
+          address: newClientAddress,
+          route: newClientRoute.trim() || 'Ruta General',
+          assigned_seller_id: profile.id,
+        },
+      ]);
+
+      if (error) throw error;
+
+      alert('¡Cliente registrado con éxito!');
+      setShowNewClientModal(false);
+      setNewClientName('');
+      setNewClientDoc('');
+      setNewClientPhone('');
+      setNewClientAddress('');
+      setNewClientRoute('Ruta Principal');
+      fetchPOSData(profile.id);
+    } catch (err: any) {
+      alert('Error al registrar cliente: ' + err.message);
+    } finally {
+      setLoadingClient(false);
+    }
+  };
 
   // Agregar producto al Carrito
   const addToCart = () => {
@@ -130,7 +182,7 @@ export default function POSPage() {
     setItemQty(1);
   };
 
-  // Procesar Nuevo Pedido / Venta
+  // Procesar Pedido / Venta y mostrar Ticket 80mm
   const handleCreateOrder = async () => {
     if (!selectedClientId) return alert('Por favor selecciona un cliente');
     if (cart.length === 0) return alert('El carrito está vacío');
@@ -140,28 +192,28 @@ export default function POSPage() {
       const totalCart = cart.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
       const nextNum = (myInvoices.length + 1).toString().padStart(4, '0');
       const invoiceNumber = `PED-${nextNum}`;
+      const clientObj = myClients.find(c => c.id === selectedClientId);
 
-const { data: invHeader, error: invErr } = await supabase
-  .from('invoices')
-  .insert([
-    {
-      tenant_id: profile.tenant_id,
-      client_id: selectedClientId,
-      seller_id: profile.id, // <-- Este campo vincula la venta a tu usuario
-      total: totalCart,
-      status: paymentTerm === 'credito' ? 'credito' : 'issued',
-      payment_term: paymentTerm,
-      balance_due: paymentTerm === 'credito' ? totalCart : 0,
-      exchange_rate: currentRate,
-      invoice_number: invoiceNumber,
-    },
-  ])
-  .select()
-  .single();
+      const { data: invHeader, error: invErr } = await supabase
+        .from('invoices')
+        .insert([
+          {
+            tenant_id: profile.tenant_id,
+            client_id: selectedClientId,
+            seller_id: profile.id,
+            total: totalCart,
+            status: paymentTerm === 'credito' ? 'credito' : 'issued',
+            payment_term: paymentTerm,
+            balance_due: paymentTerm === 'credito' ? totalCart : 0,
+            exchange_rate: currentRate,
+            invoice_number: invoiceNumber,
+          },
+        ])
+        .select()
+        .single();
 
       if (invErr) throw invErr;
 
-      // Insertar ítems
       if (invHeader) {
         const itemsToInsert = cart.map((item) => ({
           invoice_id: invHeader.id,
@@ -172,7 +224,6 @@ const { data: invHeader, error: invErr } = await supabase
 
         await supabase.from('invoice_items').insert(itemsToInsert);
 
-        // Descontar stock
         for (const item of cart) {
           const pObj = products.find((p) => p.id === item.productId);
           if (pObj) {
@@ -184,7 +235,17 @@ const { data: invHeader, error: invErr } = await supabase
         }
       }
 
-      alert('¡Pedido / Venta registrada con éxito!');
+      // Guardar datos para desplegar ticket térmico de 80mm
+      setTicketData({
+        invoice_number: invoiceNumber,
+        client_name: clientObj?.name || 'Cliente General',
+        client_route: clientObj?.route || 'General',
+        created_at: new Date(),
+        payment_term: paymentTerm,
+        items: [...cart],
+        total: totalCart
+      });
+
       setShowNewOrderModal(false);
       setCart([]);
       setSelectedClientId('');
@@ -196,7 +257,6 @@ const { data: invHeader, error: invErr } = await supabase
     }
   };
 
-  // Logout
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.href = '/';
@@ -213,7 +273,7 @@ const { data: invHeader, error: invErr } = await supabase
     );
   }
 
-  // Cálculos Vendedor
+  // Cálculos de tiempo
   const now = new Date();
   const todayInvoices = myInvoices.filter((inv) => {
     const d = new Date(inv.created_at);
@@ -230,7 +290,6 @@ const { data: invHeader, error: invErr } = await supabase
     return d.getFullYear() === now.getFullYear();
   });
 
-  // Facturas según el filtro del Dashboard
   const filteredDashInvoices = dashFilter === 'today' ? todayInvoices : dashFilter === 'month' ? monthInvoices : yearInvoices;
   const dashTotalSales = filteredDashInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
 
@@ -240,10 +299,34 @@ const { data: invHeader, error: invErr } = await supabase
   const quotaPercent = Math.min(Math.round((totalSalesThisMonth / monthlyQuota) * 100), 100);
   const quotaRemaining = Math.max(0, monthlyQuota - totalSalesThisMonth);
 
+  // --- CÁLCULO DE MEJOR RUTA ---
+  const routeSalesMap: { [route: string]: { total: number; count: number } } = {};
+  monthInvoices.forEach((inv) => {
+    const rName = inv.clients?.route || 'Sin Ruta';
+    if (!routeSalesMap[rName]) {
+      routeSalesMap[rName] = { total: 0, count: 0 };
+    }
+    routeSalesMap[rName].total += Number(inv.total || 0);
+    routeSalesMap[rName].count += 1;
+  });
+
+  const rankedRoutes = Object.entries(routeSalesMap)
+    .map(([route, data]) => ({ route, ...data }))
+    .sort((a, b) => b.total - a.total);
+
+  // Filtrado de clientes por Búsqueda y Ruta
+  const filteredClients = myClients.filter((c) => {
+    const matchesSearch = c.name.toLowerCase().includes(clientSearch.toLowerCase()) || (c.document_id && c.document_id.toLowerCase().includes(clientSearch.toLowerCase()));
+    const matchesRoute = selectedRouteFilter === 'ALL' || c.route === selectedRouteFilter;
+    return matchesSearch && matchesRoute;
+  });
+
+  const allAvailableRoutes = Array.from(new Set(myClients.map(c => c.route || 'General')));
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
-      {/* Barra Superior Independiente POS */}
-      <header className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-lg">
+      {/* Barra Superior POS */}
+      <header className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-lg print:hidden">
         <div className="flex items-center space-x-3">
           <div className="bg-blue-600 text-white font-extrabold px-3 py-1.5 rounded-lg text-lg tracking-wider">
             POS
@@ -254,7 +337,6 @@ const { data: invHeader, error: invErr } = await supabase
           </div>
         </div>
 
-        {/* Tasa BCV y Menú Principal */}
         <div className="flex items-center space-x-3">
           <div className="bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700 text-xs text-right">
             <span className="text-slate-400 block">Tasa Oficial</span>
@@ -267,8 +349,8 @@ const { data: invHeader, error: invErr } = await supabase
         </div>
       </header>
 
-      {/* Navegación por Opciones Exclusivas: PEDIDOS, CLIENTES, DASHBOARD */}
-      <div className="bg-slate-800/60 border-b border-slate-700 px-6 py-3 flex justify-center gap-4">
+      {/* Navegación POS */}
+      <div className="bg-slate-800/60 border-b border-slate-700 px-6 py-3 flex justify-center gap-4 print:hidden">
         {[
           { id: 'pedidos', label: '📦 PEDIDOS', count: todayInvoices.length },
           { id: 'clientes', label: '👥 CLIENTES', count: myClients.length },
@@ -292,10 +374,11 @@ const { data: invHeader, error: invErr } = await supabase
       </div>
 
       {/* Contenido Principal */}
-      <main className="flex-1 p-6 max-w-7xl w-full mx-auto overflow-y-auto">
+      <main className="flex-1 p-6 max-w-7xl w-full mx-auto overflow-y-auto print:p-0 print:max-w-none">
+        
         {/* VISTA 1: PEDIDOS */}
         {posTab === 'pedidos' && (
-          <div className="space-y-6">
+          <div className="space-y-6 print:hidden">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <h2 className="text-xl font-bold text-white">Ventas y Pedidos de Hoy</h2>
@@ -310,7 +393,6 @@ const { data: invHeader, error: invErr } = await supabase
               </button>
             </div>
 
-            {/* Listado de Pedidos del día */}
             <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-sm">
               <table className="w-full text-left border-collapse text-sm">
                 <thead>
@@ -352,27 +434,59 @@ const { data: invHeader, error: invErr } = await supabase
           </div>
         )}
 
-{/* VISTA 2: CLIENTES CON CUENTAS POR COBRAR (CxC) */}
+        {/* VISTA 2: CLIENTES (Con Búsqueda y Filtro de Ruta) */}
         {posTab === 'clientes' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-bold text-white">Directorio de Clientes y Cuentas por Cobrar</h2>
-              <p className="text-xs text-slate-400">Consulta el acumulado de compras del mes y las deudas pendientes a la tasa oficial del día</p>
+          <div className="space-y-6 print:hidden">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">Directorio de Clientes y Cuentas por Cobrar</h2>
+                <p className="text-xs text-slate-400">Filtra por ruta o busca clientes por nombre/RIF</p>
+              </div>
+              <button
+                onClick={() => setShowNewClientModal(true)}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow"
+              >
+                + Nuevo Cliente
+              </button>
+            </div>
+
+            {/* Barra de Búsqueda y Filtro de Ruta */}
+            <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  placeholder="🔍 Buscar cliente por nombre o RIF/CI..."
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="w-full md:w-64">
+                <select
+                  value={selectedRouteFilter}
+                  onChange={(e) => setSelectedRouteFilter(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="ALL">📍 Todas las Rutas</option>
+                  {allAvailableRoutes.map((route) => (
+                    <option key={route} value={route}>{route}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myClients.length === 0 ? (
+              {filteredClients.length === 0 ? (
                 <div className="col-span-full bg-slate-800 p-8 rounded-2xl border border-slate-700 text-center text-slate-400">
-                  No tienes clientes asignados a tu usuario actualmente.
+                  No se encontraron clientes con los filtros seleccionados.
                 </div>
               ) : (
-                myClients.map((client) => {
-                  // 1. Facturas del mes de este cliente
+                filteredClients.map((client) => {
                   const clientMonthInvoices = monthInvoices.filter((inv) => inv.client_id === client.id);
                   const totalSoldToClient = clientMonthInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
                   const hasPurchasedThisMonth = totalSoldToClient > 0;
 
-                  // 2. Facturas Pendientes por Cobrar (CxC) de este cliente
                   const pendingInvoices = myInvoices.filter(
                     (inv) => inv.client_id === client.id && Number(inv.balance_due || 0) > 0.01 && inv.status !== 'paid'
                   );
@@ -380,87 +494,32 @@ const { data: invHeader, error: invErr } = await supabase
                   const totalDebtVES = totalDebtUSD * currentRate;
 
                   return (
-                    <div
-                      key={client.id}
-                      className={`p-5 rounded-2xl border transition-all space-y-4 ${
-                        totalDebtUSD > 0
-                          ? 'bg-slate-800/90 border-amber-500/50 shadow-lg shadow-amber-950/20'
-                          : hasPurchasedThisMonth
-                          ? 'bg-slate-800 border-emerald-500/40'
-                          : 'bg-slate-800/60 border-slate-700/80'
-                      }`}
-                    >
-                      {/* Estado y RIF */}
+                    <div key={client.id} className="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-sm">
                       <div className="flex justify-between items-start">
-                        <div className="flex gap-1.5 flex-wrap">
-                          <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full ${
-                            hasPurchasedThisMonth ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'
-                          }`}>
-                            {hasPurchasedThisMonth ? '✓ Compró este mes' : 'Sin compras este mes'}
-                          </span>
-
-                          {totalDebtUSD > 0 && (
-                            <span className="px-2.5 py-1 text-[10px] font-extrabold rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 animate-pulse">
-                              ⚠️ Deuda Pendiente
-                            </span>
-                          )}
-                        </div>
+                        <span className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                          📍 {client.route || 'Sin Ruta'}
+                        </span>
                         <span className="text-xs text-slate-400 font-mono">{client.document_id || 'Sin RIF/CI'}</span>
                       </div>
 
-                      {/* Nombre y Contacto */}
                       <div>
                         <h3 className="text-lg font-bold text-white mb-1">{client.name}</h3>
                         <p className="text-xs text-slate-400">{client.phone || 'Sin teléfono'} • {client.address || 'Sin dirección'}</p>
                       </div>
 
-                      {/* Resumen de Cuentas por Cobrar (Deuda) */}
-                      <div className="bg-slate-900/80 p-3.5 rounded-xl border border-slate-700/80 space-y-2">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-slate-400 uppercase font-semibold">Saldo Pendiente (CxC):</span>
-                          <div className="text-right">
-                            <span className={`text-base font-extrabold ${totalDebtUSD > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
-                              ${totalDebtUSD.toFixed(2)}
-                            </span>
-                          </div>
+                      <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700 space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-400">Saldo Pendiente (CxC):</span>
+                          <span className={`font-bold ${totalDebtUSD > 0 ? 'text-rose-400' : 'text-slate-300'}`}>${totalDebtUSD.toFixed(2)}</span>
                         </div>
-
-                        <div className="flex justify-between items-center text-xs border-t border-slate-800 pt-1.5">
-                          <span className="text-slate-500 text-[11px]">Al cambio del día (BCV):</span>
-                          <span className="font-mono text-emerald-400 font-bold">
-                            Bs. {totalDebtVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-500">Al cambio (BCV):</span>
+                          <span className="font-mono text-emerald-400">Bs. {totalDebtVES.toFixed(2)}</span>
                         </div>
                       </div>
 
-                      {/* Desplegable de Facturas Vencidas / Pendientes */}
-                      {pendingInvoices.length > 0 && (
-                        <div className="space-y-2 pt-1 border-t border-slate-700/50">
-                          <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block">
-                            Facturas a Crédito ({pendingInvoices.length}):
-                          </span>
-                          <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
-                            {pendingInvoices.map((inv) => (
-                              <div key={inv.id} className="bg-slate-900/50 p-2 rounded-lg text-xs flex justify-between items-center border border-slate-800">
-                                <div>
-                                  <span className="font-mono text-blue-400 font-bold block">{inv.invoice_number}</span>
-                                  <span className="text-[10px] text-slate-500">{new Date(inv.created_at).toLocaleDateString('es-VE')}</span>
-                                </div>
-                                <div className="text-right">
-                                  <span className="font-bold text-rose-400">${Number(inv.balance_due).toFixed(2)}</span>
-                                  <span className="text-[10px] text-slate-400 block font-mono">
-                                    Bs. {(Number(inv.balance_due) * currentRate).toFixed(2)}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Acumulado de Compras del Mes */}
-                      <div className="border-t border-slate-700/60 pt-3 flex justify-between items-center text-xs">
-                        <span className="text-slate-400 font-semibold">Ventas del Mes:</span>
+                      <div className="border-t border-slate-700 pt-3 flex justify-between items-center text-xs">
+                        <span className="text-slate-400">Ventas del Mes:</span>
                         <span className="font-bold text-white">${totalSoldToClient.toFixed(2)}</span>
                       </div>
                     </div>
@@ -470,36 +529,53 @@ const { data: invHeader, error: invErr } = await supabase
             </div>
           </div>
         )}
-        {/* VISTA 3: DASHBOARD */}
+
+        {/* VISTA 3: DASHBOARD (Con Sección de Mejor Ruta) */}
         {posTab === 'dashboard' && (
-          <div className="space-y-6">
+          <div className="space-y-6 print:hidden">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <h2 className="text-xl font-bold text-white">Resumen y Avance de Cuotas</h2>
-                <p className="text-xs text-slate-400">Seguimiento de tu rendimiento individual de ventas</p>
+                <p className="text-xs text-slate-400">Seguimiento de tu rendimiento y rutas comerciales</p>
               </div>
 
-              {/* Filtro de Fecha */}
               <div className="bg-slate-800 p-1 rounded-xl border border-slate-700 flex text-xs">
-                <button
-                  onClick={() => setDashFilter('today')}
-                  className={`px-3 py-1.5 rounded-lg font-bold transition-all ${dashFilter === 'today' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                >
-                  Hoy
-                </button>
-                <button
-                  onClick={() => setDashFilter('month')}
-                  className={`px-3 py-1.5 rounded-lg font-bold transition-all ${dashFilter === 'month' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                >
-                  Este Mes
-                </button>
-                <button
-                  onClick={() => setDashFilter('year')}
-                  className={`px-3 py-1.5 rounded-lg font-bold transition-all ${dashFilter === 'year' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                >
-                  Este Año
-                </button>
+                <button onClick={() => setDashFilter('today')} className={`px-3 py-1.5 rounded-lg font-bold transition-all ${dashFilter === 'today' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Hoy</button>
+                <button onClick={() => setDashFilter('month')} className={`px-3 py-1.5 rounded-lg font-bold transition-all ${dashFilter === 'month' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Este Mes</button>
+                <button onClick={() => setDashFilter('year')} className={`px-3 py-1.5 rounded-lg font-bold transition-all ${dashFilter === 'year' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Este Año</button>
               </div>
+            </div>
+
+            {/* SECCIÓN: MEJOR RUTA DEL MES */}
+            <div className="bg-gradient-to-r from-blue-900/40 to-slate-800 border border-blue-500/30 p-6 rounded-2xl space-y-4 shadow-lg">
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-xs font-bold text-blue-400 uppercase tracking-widest block">Análisis Logístico</span>
+                  <h3 className="text-xl font-extrabold text-white">🗺️ Rendimiento por Rutas (Este Mes)</h3>
+                </div>
+                {rankedRoutes.length > 0 && (
+                  <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-bold">
+                    🏆 Mejor Ruta: {rankedRoutes[0].route}
+                  </span>
+                )}
+              </div>
+
+              {rankedRoutes.length === 0 ? (
+                <p className="text-xs text-slate-400">No hay ventas registradas en este mes para calcular rutas.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {rankedRoutes.map((r, idx) => (
+                    <div key={r.route} className={`bg-slate-900/80 p-4 rounded-xl border ${idx === 0 ? 'border-emerald-500/50 shadow-emerald-950/20' : 'border-slate-700'}`}>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-slate-300">#{idx + 1} {r.route}</span>
+                        <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">{r.count} pedidos</span>
+                      </div>
+                      <p className="text-2xl font-black text-emerald-400">${r.total.toFixed(2)}</p>
+                      <p className="text-[11px] text-slate-400 font-mono mt-1">Bs. {(r.total * currentRate).toFixed(2)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Avance de Cuota Mensual */}
@@ -508,9 +584,7 @@ const { data: invHeader, error: invErr } = await supabase
                 <div>
                   <h3 className="text-lg font-bold text-white">Meta / Cuota del Mes</h3>
                   <p className="text-xs text-slate-400">
-                    {quotaPercent >= 100
-                      ? '🎉 ¡Felicidades! Has superado tu cuota de ventas del mes.'
-                      : `Te faltan $${quotaRemaining.toFixed(2)} en ventas para alcanzar tu cuota.`}
+                    {quotaPercent >= 100 ? '🎉 ¡Felicidades! Has superado tu cuota de ventas del mes.' : `Te faltan $${quotaRemaining.toFixed(2)} en ventas para alcanzar tu cuota.`}
                   </p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-xs font-extrabold ${quotaPercent >= 100 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
@@ -518,12 +592,8 @@ const { data: invHeader, error: invErr } = await supabase
                 </span>
               </div>
 
-              {/* Barra de Progreso */}
               <div className="w-full bg-slate-900 rounded-full h-4 border border-slate-700 overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-500 ${quotaPercent >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
-                  style={{ width: `${quotaPercent}%` }}
-                ></div>
+                <div className={`h-full transition-all duration-500 ${quotaPercent >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${quotaPercent}%` }}></div>
               </div>
 
               <div className="grid grid-cols-3 gap-4 text-center pt-2">
@@ -541,28 +611,55 @@ const { data: invHeader, error: invErr } = await supabase
                 </div>
               </div>
             </div>
-
-            {/* Métrica de Ventas Filtrada */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl">
-                <span className="text-xs font-semibold text-slate-400 uppercase">Total Ventas ({dashFilter})</span>
-                <p className="text-3xl font-extrabold text-emerald-400 mt-2">${dashTotalSales.toFixed(2)}</p>
-                <p className="text-xs text-slate-400 mt-1">Equivalente a: <strong className="text-white">Bs. {(dashTotalSales * currentRate).toFixed(2)}</strong></p>
-              </div>
-
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl">
-                <span className="text-xs font-semibold text-slate-400 uppercase">Pedidos Procesados ({dashFilter})</span>
-                <p className="text-3xl font-extrabold text-white mt-2">{filteredDashInvoices.length}</p>
-                <p className="text-xs text-slate-400 mt-1">Transacciones completadas</p>
-              </div>
-            </div>
           </div>
         )}
       </main>
 
-      {/* MODAL: NUEVO PEDIDO / REGISTRO RÁPIDO */}
+      {/* MODAL: NUEVO CLIENTE (Con Ruta) */}
+      {showNewClientModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 print:hidden">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+              <h3 className="text-lg font-bold text-white">Registrar Nuevo Cliente</h3>
+              <button onClick={() => setShowNewClientModal(false)} className="text-slate-400 hover:text-white font-bold">✕</button>
+            </div>
+
+            <form onSubmit={handleCreateClient} className="space-y-3 text-sm">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Nombre / Razón Social</label>
+                <input type="text" required placeholder="Comercial Los Amigos C.A." value={newClientName} onChange={(e) => setNewClientName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">RIF / C.I.</label>
+                <input type="text" placeholder="J-12345678-9" value={newClientDoc} onChange={(e) => setNewClientDoc(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">📍 Ruta de Reparto / Zona</label>
+                <input type="text" required placeholder="Ej: Ruta Norte, Zona Comercial Centro" value={newClientRoute} onChange={(e) => setNewClientRoute(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-semibold text-emerald-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Teléfono</label>
+                <input type="text" placeholder="0414-0000000" value={newClientPhone} onChange={(e) => setNewClientPhone(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Dirección</label>
+                <input type="text" placeholder="Avenida Principal..." value={newClientAddress} onChange={(e) => setNewClientAddress(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white" />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3 border-t border-slate-700">
+                <button type="button" onClick={() => setShowNewClientModal(false)} className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-2 rounded-lg text-xs">Cancelar</button>
+                <button type="submit" disabled={loadingClient} className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2 rounded-lg text-xs">
+                  {loadingClient ? 'Guardando...' : 'Guardar Cliente'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NUEVO PEDIDO / VENTA */}
       {showNewOrderModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in print:hidden">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-700 pb-3">
               <h3 className="text-lg font-bold text-white">NUEVO PEDIDO / REGISTRO DE VENTA</h3>
@@ -572,68 +669,40 @@ const { data: invHeader, error: invErr } = await supabase
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Cliente Asignado</label>
-                <select
-                  value={selectedClientId}
-                  onChange={(e) => setSelectedClientId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm"
-                >
+                <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm">
                   <option value="">Seleccionar Cliente...</option>
-                  {myClients.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                  {myClients.map((c) => (<option key={c.id} value={c.id}>{c.name} ({c.route || 'Sin Ruta'})</option>))}
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Condición de Pago</label>
-                <select
-                  value={paymentTerm}
-                  onChange={(e) => setPaymentTerm(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm"
-                >
+                <select value={paymentTerm} onChange={(e) => setPaymentTerm(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm">
                   <option value="contado">Contado</option>
                   <option value="credito">Crédito (5 Días)</option>
                 </select>
               </div>
             </div>
 
-            {/* Agregar Ítems */}
             <div className="border-t border-slate-700 pt-3 grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Producto</label>
-                <select
-                  value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm"
-                >
+                <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm">
                   <option value="">Seleccionar Producto...</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} - ${p.price} (Stock: {p.stock})</option>
-                  ))}
+                  {products.map((p) => (<option key={p.id} value={p.id}>{p.name} - ${p.price} (Stock: {p.stock})</option>))}
                 </select>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Cantidad</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={itemQty}
-                  onChange={(e) => setItemQty(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm font-bold"
-                />
+                <input type="number" min="1" value={itemQty} onChange={(e) => setItemQty(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm font-bold" />
               </div>
 
-              <button
-                onClick={addToCart}
-                type="button"
-                className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-3 rounded-xl text-sm transition-colors"
-              >
+              <button onClick={addToCart} type="button" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-3 rounded-xl text-sm transition-colors">
                 + Agregar
               </button>
             </div>
 
-            {/* Carrito Actual */}
             {cart.length > 0 && (
               <div className="border-t border-slate-700 pt-3 space-y-3">
                 <table className="w-full text-left text-sm text-slate-300">
@@ -663,21 +732,87 @@ const { data: invHeader, error: invErr } = await supabase
                     <span className="text-2xl font-extrabold text-emerald-400">
                       ${cart.reduce((sum, i) => sum + i.quantity * i.unit_price, 0).toFixed(2)}
                     </span>
-                    <span className="text-xs text-slate-400 ml-2">
-                      (Bs. {(cart.reduce((sum, i) => sum + i.quantity * i.unit_price, 0) * currentRate).toFixed(2)})
-                    </span>
                   </div>
 
-                  <button
-                    onClick={handleCreateOrder}
-                    disabled={loadingOrder}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    {loadingOrder ? 'Procesando...' : 'Confirmar Pedido'}
+                  <button onClick={handleCreateOrder} disabled={loadingOrder} className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-50">
+                    {loadingOrder ? 'Procesando...' : 'Confirmar y Facturar'}
                   </button>
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* --- VISTA DE TICKET TÉRMICO 80mm PARA IMPRESIÓN --- */}
+      {ticketData && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 print:bg-white print:p-0 print:absolute print:inset-0">
+          <div className="bg-white text-black font-mono w-[80mm] p-4 rounded-xl shadow-2xl space-y-3 print:shadow-none print:w-full print:p-2">
+            
+            {/* Encabezado del Ticket */}
+            <div className="text-center border-b border-dashed border-black pb-2">
+              <h2 className="font-bold text-sm">{tenant?.name || 'GRUPO KATARIS C.A.'}</h2>
+              <p className="text-[10px]">RIF: J-00000000-0</p>
+              <p className="text-[10px] font-bold mt-1">TICKET DE VENTA / PEDIDO</p>
+            </div>
+
+            {/* Datos de Factura */}
+            <div className="text-[10px] space-y-0.5 border-b border-dashed border-black pb-2">
+              <p><strong>Nº:</strong> {ticketData.invoice_number}</p>
+              <p><strong>Fecha:</strong> {new Date(ticketData.created_at).toLocaleString('es-VE')}</p>
+              <p><strong>Cliente:</strong> {ticketData.client_name}</p>
+              <p><strong>Ruta:</strong> {ticketData.client_route}</p>
+              <p><strong>Condición:</strong> {ticketData.payment_term.toUpperCase()}</p>
+              <p><strong>Vendedor:</strong> {profile?.full_name}</p>
+              <p><strong>Tasa BCV:</strong> Bs. {currentRate.toFixed(2)}</p>
+            </div>
+
+            {/* Ítems */}
+            <div className="text-[10px] border-b border-dashed border-black pb-2 space-y-1">
+              <div className="flex justify-between font-bold border-b border-black pb-0.5">
+                <span>CANT / DESC</span>
+                <span>TOTAL</span>
+              </div>
+              {ticketData.items.map((it: any, i: number) => (
+                <div key={i} className="flex justify-between">
+                  <span>{it.quantity}x {it.name}</span>
+                  <span>${(it.quantity * it.unit_price).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Totales */}
+            <div className="text-right text-xs space-y-1 border-b border-dashed border-black pb-2">
+              <p className="text-sm font-bold">
+                TOTAL USD: ${ticketData.total.toFixed(2)}
+              </p>
+              <p className="text-xs font-bold font-mono">
+                TOTAL BS: Bs. {(ticketData.total * currentRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+
+            {/* Pie de Página */}
+            <div className="text-center text-[9px] space-y-1 pt-1">
+              <p>¡Gracias por su compra!</p>
+              <p>Documento no fiscal</p>
+            </div>
+
+            {/* Botones de Acción (Se ocultan al imprimir) */}
+            <div className="flex gap-2 pt-3 print:hidden">
+              <button
+                onClick={() => window.print()}
+                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs"
+              >
+                🖨️ Imprimir Ticket (80mm)
+              </button>
+              <button
+                onClick={() => setTicketData(null)}
+                className="bg-slate-300 hover:bg-slate-400 text-black font-bold px-4 py-2 rounded-lg text-xs"
+              >
+                Cerrar
+              </button>
+            </div>
+
           </div>
         </div>
       )}
