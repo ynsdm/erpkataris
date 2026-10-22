@@ -1865,7 +1865,7 @@ const handleExportInventory = () => {
 
           alert('¡Datos del chofer actualizados con éxito!');
           setEditingDriver(null);
-          if (typeof fetchAllData === 'function') fetchAllData();
+          if (typeof fetchAllData === 'function') fetchAllData(profile?.tenant_id);
         } catch (err: any) {
           alert('Error al actualizar chofer: ' + err.message);
         }
