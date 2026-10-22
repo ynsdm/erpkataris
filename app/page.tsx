@@ -57,11 +57,8 @@ const handleAddSupplier = async (e: React.FormEvent) => {
 };
 
 const [purchaseItems, setPurchaseItems] = useState<any[]>([]);
-  productId: string;
-  productName: string;
-  qty: number;
-  cost: number;
-}>>([]);
+
+
 
 const [tempProductId, setTempProductId] = useState('');
 const [tempQty, setTempQty] = useState('');
