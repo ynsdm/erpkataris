@@ -11,11 +11,11 @@ export default function Home() {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'inventory' | 'clients' | 'invoices' | 'cxc' | 'expenses' | 'analytics' | 'payroll' | 'purchases' | 'cxp' | 'configuracion' | 'ventas' | 'sellers' | 'tracking' | 'bancos'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'inventory' | 'drivers' | 'clients' | 'invoices' | 'cxc' | 'expenses' | 'analytics' | 'payroll' | 'purchases' | 'cxp' | 'configuracion' | 'ventas' | 'sellers' | 'tracking' | 'bancos'>('dashboard');
 
 const [countryPackage, setCountryPackage] = useState('VE');
 
-
+const [showNewDriverModal, setShowNewDriverModal] = useState(false);
 const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
 const [showProcessPurchaseModal, setShowProcessPurchaseModal] = useState(false);
 const [purchasesHistory, setPurchasesHistory] = useState<any[]>([]);
@@ -1380,6 +1380,17 @@ const handleExportInventory = () => {
 >
   <span>Vendedores</span>
 </button>
+
+<button
+  onClick={() => setCurrentView('drivers')}
+  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+    currentView === 'drivers'
+      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+  }`}
+>
+  <span>Choferes</span>
+</button>
 <button
   onClick={() => setCurrentView('tracking')}
   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
@@ -1802,6 +1813,45 @@ const handleExportInventory = () => {
           )}
         </tbody>
       </table>
+    </div>
+  </div>
+)}
+
+{showNewDriverModal && (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
+      <h3 className="text-lg font-bold text-white">🚚 Registrar Nuevo Chofer</h3>
+      
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        // Lógica para registrar chofer en Supabase
+        setShowNewDriverModal(false);
+      }} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Nombre Completo</label>
+          <input type="text" required placeholder="Ej. Carlos Pérez" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Correo Electrónico</label>
+          <input type="email" required placeholder="chofer@kataris.com" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+        </div>
+
+        <div className="flex justify-end space-x-2 pt-2">
+          <button
+            type="button"
+            onClick={() => setShowNewDriverModal(false)}
+            className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold"
+          >
+            Guardar Chofer
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 )}
