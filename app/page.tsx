@@ -11,7 +11,7 @@ export default function Home() {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'inventory' | 'clients' | 'invoices' | 'cxc' | 'expenses' | 'analytics' | 'payroll' | 'purchases' | 'cxp' | 'configuracion' | 'ventas' | 'sellers' | 'bancos'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'inventory' | 'clients' | 'invoices' | 'cxc' | 'expenses' | 'analytics' | 'payroll' | 'purchases' | 'cxp' | 'configuracion' | 'ventas' | 'sellers' | 'tracking' | 'bancos'>('dashboard');
 
 const [countryPackage, setCountryPackage] = useState('VE');
 
@@ -31,6 +31,8 @@ const [purchaseProductId, setPurchaseProductId] = useState('');
 const [purchaseQty, setPurchaseQty] = useState('');
 const [purchaseIva, setPurchaseIva] = useState('16');
 const [purchaseNotes, setPurchaseNotes] = useState('');
+
+const [trackingType, setTrackingType] = useState<'seller' | 'driver'>('seller');
 
 const getTaxIdLabel = (country = 'VE') => {
   switch (country) {
@@ -1378,6 +1380,16 @@ const handleExportInventory = () => {
 >
   <span>Vendedores</span>
 </button>
+<button
+  onClick={() => setCurrentView('tracking')}
+  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+    currentView === 'tracking'
+      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+  }`}
+>
+  <span>	Seguimiento GPS</span>
+</button>
               <button
                 onClick={() => setCurrentView('configuracion')}
                 className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
@@ -1608,6 +1620,100 @@ const handleExportInventory = () => {
               </div>
             </>
           )}
+
+{currentView === 'tracking' && (
+  <div className="space-y-6">
+    <header className="flex justify-between items-center border-b border-slate-800 pb-4">
+      <div>
+        <h2 className="text-2xl font-bold text-white">📡 Rastro GPS y Monitoreo en Tiempo Real</h2>
+        <p className="text-sm text-slate-400">Ubicación exacta de la fuerza de ventas y flota de despacho.</p>
+      </div>
+
+      {/* Interruptor entre Vendedores y Choferes */}
+      <div className="bg-slate-800 p-1 rounded-xl border border-slate-700 flex text-xs">
+        <button
+          onClick={() => setTrackingType('seller')}
+          className={`px-4 py-2 rounded-lg font-bold transition-all ${
+            trackingType === 'seller' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          👨‍💼 Vendedores ({sellers.filter((p: any) => p.role === 'seller' || p.role === 'vendedor').length})
+        </button>
+        <button
+          onClick={() => setTrackingType('driver')}
+          className={`px-4 py-2 rounded-lg font-bold transition-all ${
+            trackingType === 'driver' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          🚚 Choferes / Despacho ({sellers.filter((p: any) => p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer').length})
+        </button>
+      </div>
+    </header>
+
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      {/* Panel lateral: Lista de Personal */}
+      <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl space-y-3">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+          {trackingType === 'seller' ? 'Vendedores Monitoreados' : 'Despachadores Monitoreados'}
+        </h3>
+
+        <div className="space-y-2 max-h-[500px] overflow-y-auto">
+          {sellers.filter((p: any) => {
+            const roleMatch = trackingType === 'seller' 
+              ? (p.role === 'seller' || p.role === 'vendedor')
+              : (p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer');
+            return roleMatch;
+          }).length === 0 ? (
+            <p className="text-xs text-slate-500 p-4 text-center">
+              No hay {trackingType === 'seller' ? 'vendedores' : 'choferes'} registrados.
+            </p>
+          ) : (
+            sellers.filter((p: any) => {
+              const roleMatch = trackingType === 'seller' 
+                ? (p.role === 'seller' || p.role === 'vendedor')
+                : (p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer');
+              return roleMatch;
+            }).map((user: any) => (
+              <div key={user.id} className="bg-slate-900 border border-slate-700 p-3 rounded-xl space-y-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-white">{user.full_name}</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  Última señal: {user.location_updated_at ? new Date(user.location_updated_at).toLocaleTimeString() : 'Sin señal'}
+                </p>
+                {user.current_lat && user.current_lng ? (
+                  <a
+                    href={`https://www.google.com/maps?q=${user.current_lat},${user.current_lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-[10px] text-blue-400 font-bold hover:underline mt-1"
+                  >
+                    📍 Abrir en Google Maps
+                  </a>
+                ) : (
+                  <span className="text-[10px] text-slate-500 italic block mt-1">Ubicación no activa</span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Área del Mapa */}
+      <div className="lg:col-span-3 bg-slate-800 border border-slate-700 rounded-2xl h-[550px] overflow-hidden relative flex items-center justify-center">
+        <div className="text-center space-y-2">
+          <span className="text-4xl">🗺️</span>
+          <p className="text-sm font-bold text-white">Módulo de Mapa Interactivo</p>
+          <p className="text-xs text-slate-400 max-w-md">
+            Desde aquí podrás visualizar el movimiento de la ruta en tiempo real.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
 {currentView === 'sellers' && (
             <>
               <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">

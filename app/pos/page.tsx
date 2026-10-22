@@ -59,6 +59,27 @@ export default function POSPage() {
     return () => subscription.unsubscribe();
   }, []);
 
+// Código para activar en la vista del Vendedor / Chofer
+useEffect(() => {
+  if (profile?.id && navigator.geolocation) {
+    const watchId = navigator.geolocation.watchPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        await supabase.from('profiles').update({
+          current_lat: latitude,
+          current_lng: longitude,
+          location_updated_at: new Date().toISOString(),
+          is_active_tracker: true
+        }).eq('id', profile.id);
+      },
+      (error) => console.error('Error al capturar GPS:', error),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }
+}, [profile]);
+
   const fetchPOSData = async (userId: string) => {
     try {
       const { data: profData } = await supabase
