@@ -1739,6 +1739,73 @@ const handleExportInventory = () => {
   </div>
 )}
 
+{currentView === 'drivers' && (
+  <div className="space-y-6">
+    <header className="flex justify-between items-center border-b border-slate-800 pb-4">
+      <div>
+        <h2 className="text-2xl font-bold text-white">🚚 Gestión de Choferes y Flota</h2>
+        <p className="text-sm text-slate-400">Administra el personal de transporte y asignación de despachos.</p>
+      </div>
+      <button
+        onClick={() => setShowNewDriverModal(true)}
+        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition-all shadow-lg shadow-emerald-600/30"
+      >
+        + Registrar Chofer
+      </button>
+    </header>
+
+    {/* Tabla de Choferes */}
+    <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+      <table className="w-full text-left border-collapse">
+        <thead>
+          <tr className="bg-slate-900/60 border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
+            <th className="p-4">Nombre del Chofer</th>
+            <th className="p-4">Correo / Usuario</th>
+            <th className="p-4">Vehículo / Placa</th>
+            <th className="p-4">Estatus GPS</th>
+            <th className="p-4 text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-700 text-sm text-slate-200">
+          {sellers.filter((p: any) => p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer').length === 0 ? (
+            <tr>
+              <td colSpan={5} className="p-6 text-center text-slate-500">
+                No hay choferes registrados en el sistema.
+              </td>
+            </tr>
+          ) : (
+            sellers.filter((p: any) => p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer').map((driver: any) => (
+              <tr key={driver.id} className="hover:bg-slate-700/50 transition-colors">
+                <td className="p-4 font-bold text-white">{driver.full_name}</td>
+                <td className="p-4 text-slate-400 font-mono text-xs">{driver.email || 'N/A'}</td>
+                <td className="p-4">{driver.vehicle_info || 'Camión / Furgón por asignar'}</td>
+                <td className="p-4">
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                    driver.current_lat ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-700 text-slate-400'
+                  }`}>
+                    {driver.current_lat ? '🟢 GPS Activo' : '⚪ Inactivo'}
+                  </span>
+                </td>
+                <td className="p-4 text-center">
+                  <button
+                    onClick={() => {
+                      // Aquí puedes abrir detalles o asignar ruta
+                      alert(`Gestionando ruta para: ${driver.full_name}`);
+                    }}
+                    className="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                  >
+                    Ver Órdenes
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
 {currentView === 'sellers' && (
             <>
               <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
