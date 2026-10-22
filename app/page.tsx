@@ -1700,15 +1700,40 @@ const handleExportInventory = () => {
         </div>
       </div>
 
-      {/* Área del Mapa */}
-      <div className="lg:col-span-3 bg-slate-800 border border-slate-700 rounded-2xl h-[550px] overflow-hidden relative flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <span className="text-4xl">🗺️</span>
-          <p className="text-sm font-bold text-white">Módulo de Mapa Interactivo</p>
-          <p className="text-xs text-slate-400 max-w-md">
-            Desde aquí podrás visualizar el movimiento de la ruta en tiempo real.
-          </p>
-        </div>
+      {/* Área del Mapa Interactivo */}
+      <div className="lg:col-span-3 bg-slate-800 border border-slate-700 rounded-2xl h-[550px] overflow-hidden relative shadow-inner">
+        {(() => {
+          const userWithLocation = sellers.find((p: any) => {
+            const roleMatch = trackingType === 'seller' 
+              ? (p.role === 'seller' || p.role === 'vendedor')
+              : (p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer');
+            return roleMatch && p.current_lat && p.current_lng;
+          });
+
+          const lat = userWithLocation?.current_lat || 10.6427;
+          const lng = userWithLocation?.current_lng || -71.6125;
+
+          return (
+            <div className="w-full h-full relative">
+              <iframe
+                title="Mapa de Rastreamiento GPS"
+                width="100%"
+                height="100%"
+                className="border-0 grayscale contrast-125 opacity-90 hover:grayscale-0 transition-all duration-500"
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.03}%2C${lat - 0.03}%2C${lng + 0.03}%2C${lat + 0.03}&layer=mapnik&marker=${lat}%2C${lng}`}
+              />
+              
+              <div className="absolute top-4 right-4 bg-slate-900/90 backdrop-blur-md border border-slate-700 px-4 py-2 rounded-xl text-xs text-white shadow-lg flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                <span>
+                  {userWithLocation 
+                    ? `Monitoreando a: ${userWithLocation.full_name}` 
+                    : 'Mostrando zona de cobertura (Sin señal activa)'}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   </div>
