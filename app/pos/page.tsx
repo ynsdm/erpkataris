@@ -8,6 +8,8 @@ export default function POSPage() {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
+const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+const isLight = theme === 'light';
 
   // Vistas POS: 'pedidos' | 'clientes' | 'dashboard'
   const [posTab, setPosTab] = useState<'pedidos' | 'clientes' | 'dashboard'>('pedidos');
@@ -59,28 +61,28 @@ export default function POSPage() {
     return () => subscription.unsubscribe();
   }, []);
 
-// Código para activar en la vista del Vendedor / Chofer
-useEffect(() => {
-  if (profile?.id && navigator.geolocation) {
-    const watchId = navigator.geolocation.watchPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        await supabase.from('profiles').update({
-          current_lat: latitude,
-          current_lng: longitude,
-          location_updated_at: new Date().toISOString(),
-          is_active_tracker: true
-        }).eq('id', profile.id);
-      },
-      (error) => console.error('Error al capturar GPS:', error),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-    );
+  // Código para activar geolocalización GPS del vendedor/chofer
+  useEffect(() => {
+    if (profile?.id && navigator.geolocation) {
+      const watchId = navigator.geolocation.watchPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          await supabase.from('profiles').update({
+            current_lat: latitude,
+            current_lng: longitude,
+            location_updated_at: new Date().toISOString(),
+            is_active_tracker: true
+          }).eq('id', profile.id);
+        },
+        (error) => console.error('Error al capturar GPS:', error),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+      );
 
-    return () => navigator.geolocation.clearWatch(watchId);
-  }
-}, [profile]);
+      return () => navigator.geolocation.clearWatch(watchId);
+    }
+  }, [profile]);
 
-  const fetchPOSData = async (userId: string) => {
+const fetchPOSData = async (userId: string) => {
     try {
       const { data: profData } = await supabase
         .from('profiles')
@@ -89,6 +91,22 @@ useEffect(() => {
         .maybeSingle();
 
       if (profData) {
+        // 🛑 VALIDACIÓN DE SEGURIDAD POR ROL
+        const allowedRoles = ['admin', 'seller', 'vendedor'];
+        const userRole = (profData.role || '').toLowerCase();
+
+        if (!allowedRoles.includes(userRole)) {
+          alert('Acceso no autorizado: Esta sección es exclusiva para vendedores y administradores.');
+          
+          // Redirigir al módulo correspondiente según su rol
+          if (userRole === 'driver' || userRole === 'chofer' || userRole === 'despachador') {
+            window.location.href = '/despachos'; // O la ruta de choferes
+          } else {
+            window.location.href = '/';
+          }
+          return;
+        }
+
         setProfile(profData);
         if (profData.tenants) setTenant(profData.tenants);
 
@@ -133,6 +151,23 @@ useEffect(() => {
 
   const currentRate = Number(tenant?.exchange_rate || 36.00);
 
+  // 🟢 FILTRO DINÁMICO Y ACUMULATIVO DE MARCAS PERMITIDAS EN EL POS
+  const availableProductsForPOS = products.filter((product: any) => {
+    // Si es administrador ve todo el inventario
+    if (profile?.role === 'admin') return true;
+
+    // Si no tiene restricciones configuradas o dice 'todas', ve todo
+    const userAllowedBrands = profile?.allowed_brands ? profile.allowed_brands.toLowerCase().trim() : '';
+    if (!userAllowedBrands || userAllowedBrands === 'todas') return true;
+
+    // Separar marcas múltiples por comas (acumulativo: ej. "cali, primor, mavesa")
+    const allowedList = userAllowedBrands.split(',').map((b: string) => b.trim());
+
+    // Verificar si la marca del producto coincide con alguna permitida
+    const productBrand = (product.brand || product.marca || '').toLowerCase().trim();
+    return allowedList.some((allowedBrand: string) => productBrand.includes(allowedBrand));
+  });
+
   // Registrar Nuevo Cliente con Ruta
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,10 +206,10 @@ useEffect(() => {
     }
   };
 
-  // Agregar producto al Carrito
+  // Agregar producto al Carrito (usando la lista filtrada por marcas)
   const addToCart = () => {
     if (!selectedProductId || itemQty <= 0) return;
-    const prod = products.find((p) => p.id === selectedProductId);
+    const prod = availableProductsForPOS.find((p) => p.id === selectedProductId);
     if (!prod) return;
 
     if (itemQty > prod.stock) {
@@ -256,7 +291,6 @@ useEffect(() => {
         }
       }
 
-      // Guardar datos para desplegar ticket térmico de 80mm
       setTicketData({
         invoice_number: invoiceNumber,
         client_name: clientObj?.name || 'Cliente General',
@@ -294,7 +328,7 @@ useEffect(() => {
     );
   }
 
-  // Cálculos de tiempo
+  // Cálculos de tiempo y dashboard
   const now = new Date();
   const todayInvoices = myInvoices.filter((inv) => {
     const d = new Date(inv.created_at);
@@ -306,21 +340,12 @@ useEffect(() => {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
 
-  const yearInvoices = myInvoices.filter((inv) => {
-    const d = new Date(inv.created_at);
-    return d.getFullYear() === now.getFullYear();
-  });
-
-  const filteredDashInvoices = dashFilter === 'today' ? todayInvoices : dashFilter === 'month' ? monthInvoices : yearInvoices;
-  const dashTotalSales = filteredDashInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
-
-  // Cuota mensual
-  const monthlyQuota = Number(profile?.monthly_quota || 1000);
   const totalSalesThisMonth = monthInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+  const monthlyQuota = Number(profile?.monthly_quota || profile?.sales_quota || 1000);
   const quotaPercent = Math.min(Math.round((totalSalesThisMonth / monthlyQuota) * 100), 100);
   const quotaRemaining = Math.max(0, monthlyQuota - totalSalesThisMonth);
 
-  // --- CÁLCULO DE MEJOR RUTA ---
+  // Análisis de Rutas
   const routeSalesMap: { [route: string]: { total: number; count: number } } = {};
   monthInvoices.forEach((inv) => {
     const rName = inv.clients?.route || 'Sin Ruta';
@@ -335,7 +360,6 @@ useEffect(() => {
     .map(([route, data]) => ({ route, ...data }))
     .sort((a, b) => b.total - a.total);
 
-  // Filtrado de clientes por Búsqueda y Ruta
   const filteredClients = myClients.filter((c) => {
     const matchesSearch = c.name.toLowerCase().includes(clientSearch.toLowerCase()) || (c.document_id && c.document_id.toLowerCase().includes(clientSearch.toLowerCase()));
     const matchesRoute = selectedRouteFilter === 'ALL' || c.route === selectedRouteFilter;
@@ -455,7 +479,7 @@ useEffect(() => {
           </div>
         )}
 
-        {/* VISTA 2: CLIENTES (Con Búsqueda y Filtro de Ruta) */}
+        {/* VISTA 2: CLIENTES */}
         {posTab === 'clientes' && (
           <div className="space-y-6 print:hidden">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -471,7 +495,6 @@ useEffect(() => {
               </button>
             </div>
 
-            {/* Barra de Búsqueda y Filtro de Ruta */}
             <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <input
@@ -506,7 +529,6 @@ useEffect(() => {
                 filteredClients.map((client) => {
                   const clientMonthInvoices = monthInvoices.filter((inv) => inv.client_id === client.id);
                   const totalSoldToClient = clientMonthInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
-                  const hasPurchasedThisMonth = totalSoldToClient > 0;
 
                   const pendingInvoices = myInvoices.filter(
                     (inv) => inv.client_id === client.id && Number(inv.balance_due || 0) > 0.01 && inv.status !== 'paid'
@@ -551,19 +573,13 @@ useEffect(() => {
           </div>
         )}
 
-        {/* VISTA 3: DASHBOARD (Con Sección de Mejor Ruta) */}
+        {/* VISTA 3: DASHBOARD */}
         {posTab === 'dashboard' && (
           <div className="space-y-6 print:hidden">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <h2 className="text-xl font-bold text-white">Resumen y Avance de Cuotas</h2>
                 <p className="text-xs text-slate-400">Seguimiento de tu rendimiento y rutas comerciales</p>
-              </div>
-
-              <div className="bg-slate-800 p-1 rounded-xl border border-slate-700 flex text-xs">
-                <button onClick={() => setDashFilter('today')} className={`px-3 py-1.5 rounded-lg font-bold transition-all ${dashFilter === 'today' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Hoy</button>
-                <button onClick={() => setDashFilter('month')} className={`px-3 py-1.5 rounded-lg font-bold transition-all ${dashFilter === 'month' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Este Mes</button>
-                <button onClick={() => setDashFilter('year')} className={`px-3 py-1.5 rounded-lg font-bold transition-all ${dashFilter === 'year' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Este Año</button>
               </div>
             </div>
 
@@ -586,7 +602,7 @@ useEffect(() => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {rankedRoutes.map((r, idx) => (
-                    <div key={r.route} className={`bg-slate-900/80 p-4 rounded-xl border ${idx === 0 ? 'border-emerald-500/50 shadow-emerald-950/20' : 'border-slate-700'}`}>
+                    <div key={r.route} className={`bg-slate-900/80 p-4 rounded-xl border ${idx === 0 ? 'border-emerald-500/50' : 'border-slate-700'}`}>
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-xs font-bold text-slate-300">#{idx + 1} {r.route}</span>
                         <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">{r.count} pedidos</span>
@@ -636,7 +652,7 @@ useEffect(() => {
         )}
       </main>
 
-      {/* MODAL: NUEVO CLIENTE (Con Ruta) */}
+      {/* MODAL: NUEVO CLIENTE */}
       {showNewClientModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 print:hidden">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
@@ -678,7 +694,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* MODAL: NUEVO PEDIDO / VENTA */}
+      {/* MODAL: NUEVO PEDIDO / VENTA (Usa availableProductsForPOS) */}
       {showNewOrderModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-fade-in print:hidden">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -707,10 +723,15 @@ useEffect(() => {
 
             <div className="border-t border-slate-700 pt-3 grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
               <div className="sm:col-span-2">
-                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Producto</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase mb-1">Producto (Marcas Permitidas)</label>
                 <select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm">
                   <option value="">Seleccionar Producto...</option>
-                  {products.map((p) => (<option key={p.id} value={p.id}>{p.name} - ${p.price} (Stock: {p.stock})</option>))}
+                  {/* 🟢 Renderiza únicamente los productos de las marcas autorizadas al vendedor */}
+                  {availableProductsForPOS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.brand || 'General'}) - ${p.price} (Stock: {p.stock})
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -765,19 +786,16 @@ useEffect(() => {
         </div>
       )}
 
-      {/* --- VISTA DE TICKET TÉRMICO 80mm PARA IMPRESIÓN --- */}
+      {/* TICKET TÉRMICO 80mm */}
       {ticketData && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 print:bg-white print:p-0 print:absolute print:inset-0">
           <div className="bg-white text-black font-mono w-[80mm] p-4 rounded-xl shadow-2xl space-y-3 print:shadow-none print:w-full print:p-2">
-            
-            {/* Encabezado del Ticket */}
             <div className="text-center border-b border-dashed border-black pb-2">
               <h2 className="font-bold text-sm">{tenant?.name || 'GRUPO KATARIS C.A.'}</h2>
               <p className="text-[10px]">RIF: J-00000000-0</p>
               <p className="text-[10px] font-bold mt-1">TICKET DE VENTA / PEDIDO</p>
             </div>
 
-            {/* Datos de Factura */}
             <div className="text-[10px] space-y-0.5 border-b border-dashed border-black pb-2">
               <p><strong>Nº:</strong> {ticketData.invoice_number}</p>
               <p><strong>Fecha:</strong> {new Date(ticketData.created_at).toLocaleString('es-VE')}</p>
@@ -788,7 +806,6 @@ useEffect(() => {
               <p><strong>Tasa BCV:</strong> Bs. {currentRate.toFixed(2)}</p>
             </div>
 
-            {/* Ítems */}
             <div className="text-[10px] border-b border-dashed border-black pb-2 space-y-1">
               <div className="flex justify-between font-bold border-b border-black pb-0.5">
                 <span>CANT / DESC</span>
@@ -802,7 +819,6 @@ useEffect(() => {
               ))}
             </div>
 
-            {/* Totales */}
             <div className="text-right text-xs space-y-1 border-b border-dashed border-black pb-2">
               <p className="text-sm font-bold">
                 TOTAL USD: ${ticketData.total.toFixed(2)}
@@ -812,13 +828,11 @@ useEffect(() => {
               </p>
             </div>
 
-            {/* Pie de Página */}
             <div className="text-center text-[9px] space-y-1 pt-1">
               <p>¡Gracias por su compra!</p>
               <p>Documento no fiscal</p>
             </div>
 
-            {/* Botones de Acción (Se ocultan al imprimir) */}
             <div className="flex gap-2 pt-3 print:hidden">
               <button
                 onClick={() => window.print()}
@@ -833,7 +847,6 @@ useEffect(() => {
                 Cerrar
               </button>
             </div>
-
           </div>
         </div>
       )}

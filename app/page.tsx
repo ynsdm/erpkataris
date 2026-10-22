@@ -12,6 +12,8 @@ export default function Home() {
   const [profile, setProfile] = useState<any>(null);
   const [tenant, setTenant] = useState<any>(null);
   const [currentView, setCurrentView] = useState<'dashboard' | 'inventory' | 'drivers' | 'clients' | 'invoices' | 'cxc' | 'expenses' | 'analytics' | 'payroll' | 'purchases' | 'cxp' | 'configuracion' | 'ventas' | 'sellers' | 'tracking' | 'bancos'>('dashboard');
+const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+const isLight = theme === 'light';
 
 const [countryPackage, setCountryPackage] = useState('VE');
 
@@ -19,6 +21,27 @@ const [showNewDriverModal, setShowNewDriverModal] = useState(false);
 const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
 const [showProcessPurchaseModal, setShowProcessPurchaseModal] = useState(false);
 const [purchasesHistory, setPurchasesHistory] = useState<any[]>([]);
+
+const [editingSeller, setEditingSeller] = useState<any>(null);
+const [editName, setEditName] = useState('');
+const [editEmail, setEditEmail] = useState('');
+const [editQuota, setEditQuota] = useState('');
+const [editRole, setEditRole] = useState('seller');
+const [editStatus, setEditStatus] = useState('active');
+const [editBrands, setEditBrands] = useState('');
+const [editPassword, setEditPassword] = useState('');
+
+const [editingDriver, setEditingDriver] = useState<any>(null);
+const [editDriverName, setEditDriverName] = useState('');
+const [editDriverVehicle, setEditDriverVehicle] = useState('');
+const [editDriverEmail, setEditDriverEmail] = useState('');
+const [editDriverPassword, setEditDriverPassword] = useState('');
+// 1. Primero asegúrate de que el estado 'sellers' esté declarado:
+const [sellers, setSellers] = useState<any[]>([]);
+
+// 2. Justo debajo de 'sellers', ya puedes declarar 'driversList':
+const driversList = sellers.filter((p: any) => p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer');
+
 
 const [supplierName, setSupplierName] = useState('');
 const [supplierRif, setSupplierRif] = useState('');
@@ -33,6 +56,16 @@ const [purchaseIva, setPurchaseIva] = useState('16');
 const [purchaseNotes, setPurchaseNotes] = useState('');
 
 const [trackingType, setTrackingType] = useState<'seller' | 'driver'>('seller');
+
+const [driverTab, setDriverTab] = useState<'list' | 'routes'>('list');
+const [newDriverName, setNewDriverName] = useState('');
+const [newDriverEmail, setNewDriverEmail] = useState('');
+const [newDriverPassword, setNewDriverPassword] = useState('');
+const [newDriverVehicle, setNewDriverVehicle] = useState('');
+const [selectedDriverForRoute, setSelectedDriverForRoute] = useState('');
+const [selectedInvoicesForRoute, setSelectedInvoicesForRoute] = useState<string[]>([]);
+const [invoiceSearchTerm, setInvoiceSearchTerm] = useState('');
+
 
 const getTaxIdLabel = (country = 'VE') => {
   switch (country) {
@@ -228,7 +261,6 @@ const [loadingNewSeller, setLoadingNewSeller] = useState(false);
   const [newBank, setNewBank] = useState({ bank_name: '', account_number: '', currency: 'USD', initial_balance: 0 });
   const [newTx, setNewTx] = useState({ description: '', reference_number: '', amount: '', type: 'ingreso' });
 
-const [sellers, setSellers] = useState<any[]>([]);
 const [assignedSellerId, setAssignedSellerId] = useState('');
 
   // Estados de Empleados y Nómina
@@ -1264,373 +1296,322 @@ const handleExportInventory = () => {
 
   if (session) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100 flex">
-        <aside className="w-64 bg-slate-800 border-r border-slate-700 p-6 flex flex-col justify-between">
-          <div>
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-white tracking-wide">Kataris ERP</h1>
-              <p className="text-xs text-blue-400 font-medium mt-1 uppercase tracking-wider">
-                {tenant ? tenant.name : 'CARGANDO EMPRESA...'}
-              </p>
-              <div className="mt-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700/60 flex justify-between items-center text-xs">
-                <span className="text-slate-400">Tasa BCV:</span>
-                <span className="text-emerald-400 font-bold">Bs. {currentRate.toFixed(2)}</span>
-              </div>
-            </div>
 
-            <nav className="space-y-1.5">
-              <button
-                onClick={() => setCurrentView('dashboard')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => setCurrentView('analytics')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'analytics' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Análisis de Resultados
-              </button>
-              <button
-                onClick={() => setCurrentView('payroll')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'payroll' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Nómina y Personal
-              </button>
-              {isAdmin && (
-                <button
-                  onClick={() => setCurrentView('expenses')}
-                  className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                    currentView === 'expenses' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                  }`}
-                >
-                  Gastos y Egresos
-                </button>
-              )}
+      <div className={`min-h-screen flex transition-colors duration-300 ${isLight ? 'bg-slate-100 text-slate-900' : 'bg-slate-900 text-slate-100'}`}>
+        <aside className={`w-64 border-r p-6 flex flex-col justify-between transition-colors duration-300 ${
+  isLight ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-800 border-slate-700 text-slate-100'
+}`}>
+  <div>
+    <div className="mb-6">
+      <h1 className={`text-2xl font-bold tracking-wide ${isLight ? 'text-slate-900' : 'text-white'}`}>Kataris ERP</h1>
+      <p className="text-xs text-blue-500 font-medium mt-1 uppercase tracking-wider">
+        {tenant ? tenant.name : 'CARGANDO EMPRESA...'}
+      </p>
+      <div className={`mt-2 px-3 py-1.5 rounded-lg border flex justify-between items-center text-xs ${
+        isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-700/60'
+      }`}>
+        <span className={isLight ? 'text-slate-600' : 'text-slate-400'}>Tasa BCV:</span>
+        <span className="text-emerald-500 font-bold">Bs. {currentRate.toFixed(2)}</span>
+      </div>
+    </div>
 
-              <button
-                onClick={() => setCurrentView('ventas')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'ventas' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Ventas
-              </button>
-              <button
-                onClick={() => setCurrentView('cxc')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'cxc' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Cuentas por Cobrar
-              </button>
-              <button
-                onClick={() => setCurrentView('inventory')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'inventory' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Inventarios
-              </button>
-              <button
-                onClick={() => setCurrentView('purchases')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'purchases' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Compras / Proveedores
-              </button>
-              <button
-                onClick={() => setCurrentView('cxp')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'cxp' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Cuentas por Pagar
-              </button>
-              <button
-                onClick={() => setCurrentView('bancos')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'bancos' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Bancos y Conciliación
-              </button>
-              <button
-                onClick={() => setCurrentView('clients')}
-                className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                  currentView === 'clients' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700 hover:text-white'
-                }`}
-              >
-                Clientes
-              </button>
-<button
-  onClick={() => setCurrentView('sellers')}
-  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-    currentView === 'sellers'
-      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-  }`}
->
-  <span>Vendedores</span>
-</button>
+    <nav className="space-y-1.5">
+      {[
+        { id: 'dashboard', label: 'Dashboard' },
+        { id: 'analytics', label: 'Análisis de Resultados' },
+        { id: 'payroll', label: 'Nómina y Personal' },
+        ...(isAdmin ? [{ id: 'expenses', label: 'Gastos y Egresos' }] : []),
+        { id: 'ventas', label: 'Ventas' },
+        { id: 'cxc', label: 'Cuentas por Cobrar' },
+        { id: 'inventory', label: 'Inventarios' },
+        { id: 'purchases', label: 'Compras / Proveedores' },
+        { id: 'cxp', label: 'Cuentas por Pagar' },
+        { id: 'bancos', label: 'Bancos y Conciliación' },
+        { id: 'clients', label: 'Clientes' },
+        { id: 'sellers', label: 'Vendedores' },
+        { id: 'drivers', label: 'Choferes' },
+        { id: 'tracking', label: 'Seguimiento GPS' },
+        { id: 'configuracion', label: '⚙️ Configuración' },
+      ].map((item) => (
+        <button
+          key={item.id}
+          onClick={() => setCurrentView(item.id as any)}
+          className={`w-full text-left px-4 py-2.5 rounded-lg font-medium text-sm transition-colors ${
+            currentView === item.id
+              ? 'bg-blue-600 text-white shadow'
+              : isLight
+                ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                : 'text-slate-400 hover:bg-slate-700 hover:text-white'
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
+    </nav>
+  </div>
 
-<button
-  onClick={() => setCurrentView('drivers')}
-  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-    currentView === 'drivers'
-      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-  }`}
->
-  <span>Choferes</span>
-</button>
-<button
-  onClick={() => setCurrentView('tracking')}
-  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
-    currentView === 'tracking'
-      ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-  }`}
->
-  <span>	Seguimiento GPS</span>
-</button>
-              <button
-                onClick={() => setCurrentView('configuracion')}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
-                  currentView === 'configuracion'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
-              >
-                <span className="text-lg">⚙️</span>
-                <span>Configuración</span>
-              </button>
-            </nav>
-          </div>
+  <div className={`border-t pt-4 ${isLight ? 'border-slate-200' : 'border-slate-700'}`}>
+    <div className="mb-3">
+      <p className={`text-sm font-semibold ${isLight ? 'text-slate-900' : 'text-white'}`}>{profile?.full_name || 'Usuario'}</p>
+      <p className="text-xs text-blue-500 capitalize font-medium">Rol: {profile?.role === 'admin' ? 'Administrador' : 'Vendedor'}</p>
+    </div>
+    <button
+      onClick={handleLogout}
+      className="w-full bg-red-600 hover:bg-red-500 text-white text-xs font-semibold py-2 rounded-lg transition-colors shadow"
+    >
+      Cerrar Sesión
+    </button>
+  </div>
+</aside>
 
-          <div className="border-t border-slate-700 pt-4">
-            <div className="mb-3">
-              <p className="text-sm font-semibold text-white">{profile?.full_name || 'Usuario'}</p>
-              <p className="text-xs text-blue-400 capitalize font-medium">Rol: {profile?.role === 'admin' ? 'Administrador' : 'Vendedor'}</p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="w-full bg-slate-700 hover:bg-red-600/80 text-white text-xs font-semibold py-2 rounded-lg transition-colors"
-            >
-              Cerrar Sesión
-            </button>
-          </div>
-        </aside>
-
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className={`flex-1 p-8 overflow-y-auto transition-colors duration-300 ${isLight ? 'bg-white text-slate-900' : 'bg-slate-900 text-white'}`}>
           {currentView === 'dashboard' && (
-            <>
-              <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 border-b border-slate-800 pb-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Panel Ejecutivo Visual</h2>
-                  <p className="text-sm text-slate-400">Indicadores de rendimiento y analítica filtrada por período.</p>
-                </div>
+  <>
+    <header className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 border-b pb-4 ${
+      isLight ? 'border-slate-200' : 'border-slate-800'
+    }`}>
+      <div>
+        <h2 className={`text-2xl font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>Panel Ejecutivo Visual</h2>
+        <p className={`text-sm ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Indicadores de rendimiento y analítica filtrada por período.</p>
+      </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="bg-slate-800 p-1 rounded-xl border border-slate-700 flex items-center text-xs">
-                    <button
-                      onClick={() => setDateFilter('today')}
-                      className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                        dateFilter === 'today' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Hoy
-                    </button>
-                    <button
-                      onClick={() => setDateFilter('month')}
-                      className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                        dateFilter === 'month' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Este Mes
-                    </button>
-                    <button
-                      onClick={() => setDateFilter('year')}
-                      className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                        dateFilter === 'year' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Este Año
-                    </button>
-                    <button
-                      onClick={() => setDateFilter('all')}
-                      className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                        dateFilter === 'all' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Todo
-                    </button>
-                  </div>
-                  <button
-                    onClick={handleExportInvoices}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
-                  >
-                    📊 Exportar Excel
-                  </button>
-                  {isAdmin && (
-                    <form onSubmit={handleUpdateExchangeRate} className="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl">
-                      <span className="text-xs text-slate-300 font-medium">Tasa $:</span>
-                      <input
-                        type="number"
-                        step="0.0001"
-                        value={exchangeRateInput}
-                        onChange={(e) => setExchangeRateInput(e.target.value)}
-                        className="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-emerald-400 text-xs font-bold focus:outline-none"
-                      />
-                      <button
-                        type="submit"
-                        disabled={loadingRate}
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2.5 py-1 rounded transition-colors"
-                      >
-                        {loadingRate ? '...' : 'Actualizar'}
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </header>
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Botón Cambiar Tema */}
+        <button
+          onClick={() => setTheme(isLight ? 'dark' : 'light')}
+          className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${
+            isLight 
+              ? 'bg-slate-200 hover:bg-slate-300 text-slate-800 border-slate-300' 
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+          }`}
+        >
+          {isLight ? '🌙 Modo Oscuro' : '☀️ Modo Claro'}
+        </button>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Ventas Período</span>
-                    <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                      {dateFilter}
-                    </span>
-                  </div>
-                  <h3 className="text-2xl font-bold text-emerald-400 mb-2">${totalSalesFiltered.toFixed(2)}</h3>
-                  <div className="w-full bg-slate-900 rounded-full h-2 mb-2 overflow-hidden">
-                    <div className="bg-emerald-500 h-full rounded-full" style={{ width: '100%' }}></div>
-                  </div>
-                  <p className="text-[11px] text-slate-400">Bs. {(totalSalesFiltered * currentRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
-                </div>
+        <div className={`p-1 rounded-xl border flex items-center text-xs ${
+          isLight ? 'bg-slate-200 border-slate-300' : 'bg-slate-800 border-slate-700'
+        }`}>
+          {(['today', 'month', 'year', 'all'] as const).map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setDateFilter(filter)}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                dateFilter === filter 
+                  ? 'bg-blue-600 text-white shadow' 
+                  : isLight ? 'text-slate-700 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              {filter === 'today' ? 'Hoy' : filter === 'month' ? 'Este Mes' : filter === 'year' ? 'Este Año' : 'Todo'}
+            </button>
+          ))}
+        </div>
 
-                <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Facturas Emitidas</span>
-                    <span className="bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full">Filtrado</span>
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">{filteredInvoices.length}</h3>
-                  <div className="w-full bg-slate-900 rounded-full h-2 mb-2 overflow-hidden">
-                    <div className="bg-blue-500 h-full rounded-full" style={{ width: '100%' }}></div>
-                  </div>
-                  <p className="text-[11px] text-slate-400">Transacciones en rango</p>
-                </div>
+        <button
+          onClick={handleExportInvoices}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
+        >
+          📊 Exportar Excel
+        </button>
 
-                <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Clientes en Cartera</span>
-                    <span className="bg-purple-500/10 text-purple-400 text-[10px] font-bold px-2 py-0.5 rounded-full">Directorio</span>
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">{clients.length}</h3>
-                  <div className="w-full bg-slate-900 rounded-full h-2 mb-2 overflow-hidden">
-                    <div className="bg-purple-500 h-full rounded-full" style={{ width: '100%' }}></div>
-                  </div>
-                  <p className="text-[11px] text-slate-400">Total acumulado</p>
-                </div>
+        {isAdmin && (
+          <form onSubmit={handleUpdateExchangeRate} className={`flex items-center gap-2 border px-3 py-1.5 rounded-xl ${
+            isLight ? 'bg-white border-slate-300' : 'bg-slate-800 border-slate-700'
+          }`}>
+            <span className={`text-xs font-medium ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Tasa $:</span>
+            <input
+              type="number"
+              step="0.0001"
+              value={exchangeRateInput}
+              onChange={(e) => setExchangeRateInput(e.target.value)}
+              className={`w-20 border rounded px-2 py-1 text-emerald-500 text-xs font-bold focus:outline-none ${
+                isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'
+              }`}
+            />
+            <button
+              type="submit"
+              disabled={loadingRate}
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2.5 py-1 rounded transition-colors"
+            >
+              {loadingRate ? '...' : 'Actualizar'}
+            </button>
+          </form>
+        )}
+      </div>
+    </header>
 
-                <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-sm">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">CxC Pendiente</span>
-                    <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full">Crédito</span>
-                  </div>
-                  <h3 className="text-2xl font-bold text-amber-400 mb-2">${totalPendingCxCFiltered.toFixed(2)}</h3>
-                  <div className="w-full bg-slate-900 rounded-full h-2 mb-2 overflow-hidden">
-                    <div className="bg-amber-500 h-full rounded-full" style={{ width: '100%' }}></div>
-                  </div>
-                  <p className="text-[11px] text-slate-400">Bs. {(totalPendingCxCFiltered * currentRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
-                </div>
+    {/* TARJETAS KPIS DE ESTADÍSTICAS */}
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      {/* Ventas Período */}
+      <div className={`border p-5 rounded-xl shadow-sm transition-colors ${
+        isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
+      }`}>
+        <div className="flex justify-between items-start mb-2">
+          <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+            Ventas Período
+          </span>
+          <span className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+            {dateFilter}
+          </span>
+        </div>
+        <h3 className="text-2xl font-bold text-emerald-500 mb-2">${totalSalesFiltered.toFixed(2)}</h3>
+        <div className={`w-full rounded-full h-2 mb-2 overflow-hidden ${isLight ? 'bg-slate-100' : 'bg-slate-900'}`}>
+          <div className="bg-emerald-500 h-full rounded-full" style={{ width: '100%' }}></div>
+        </div>
+        <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+          Bs. {(totalSalesFiltered * currentRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+        </p>
+      </div>
+
+      {/* Facturas Emitidas */}
+      <div className={`border p-5 rounded-xl shadow-sm transition-colors ${
+        isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
+      }`}>
+        <div className="flex justify-between items-start mb-2">
+          <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+            Facturas Emitidas
+          </span>
+          <span className="bg-blue-500/10 text-blue-500 border border-blue-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Filtrado</span>
+        </div>
+        <h3 className="text-2xl font-bold mb-2">{filteredInvoices.length}</h3>
+        <div className={`w-full rounded-full h-2 mb-2 overflow-hidden ${isLight ? 'bg-slate-100' : 'bg-slate-900'}`}>
+          <div className="bg-blue-500 h-full rounded-full" style={{ width: '100%' }}></div>
+        </div>
+        <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Transacciones en rango</p>
+      </div>
+
+      {/* Clientes en Cartera */}
+      <div className={`border p-5 rounded-xl shadow-sm transition-colors ${
+        isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
+      }`}>
+        <div className="flex justify-between items-start mb-2">
+          <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+            Clientes en Cartera
+          </span>
+          <span className="bg-purple-500/10 text-purple-500 border border-purple-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Directorio</span>
+        </div>
+        <h3 className="text-2xl font-bold mb-2">{clients.length}</h3>
+        <div className={`w-full rounded-full h-2 mb-2 overflow-hidden ${isLight ? 'bg-slate-100' : 'bg-slate-900'}`}>
+          <div className="bg-purple-500 h-full rounded-full" style={{ width: '100%' }}></div>
+        </div>
+        <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Total acumulado</p>
+      </div>
+
+      {/* CxC Pendiente */}
+      <div className={`border p-5 rounded-xl shadow-sm transition-colors ${
+        isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'
+      }`}>
+        <div className="flex justify-between items-start mb-2">
+          <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+            CxC Pendiente
+          </span>
+          <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">Crédito</span>
+        </div>
+        <h3 className="text-2xl font-bold text-amber-500 mb-2">${totalPendingCxCFiltered.toFixed(2)}</h3>
+        <div className={`w-full rounded-full h-2 mb-2 overflow-hidden ${isLight ? 'bg-slate-100' : 'bg-slate-900'}`}>
+          <div className="bg-amber-500 h-full rounded-full" style={{ width: '100%' }}></div>
+        </div>
+        <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+          Bs. {(totalPendingCxCFiltered * currentRate).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+        </p>
+      </div>
+    </div>
+
+    {/* GRÁFICOS DE VENTAS Y STOCK */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+      <div className={`border p-6 rounded-xl shadow-sm transition-colors ${
+        isLight ? 'bg-white border-slate-200' : 'bg-slate-800 border-slate-700'
+      }`}>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className={`text-lg font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>Ventas por Fecha</h3>
+            <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Evolución de ingresos en el período seleccionado</p>
+          </div>
+        </div>
+
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={filteredInvoices.slice().reverse().map((inv) => ({
+                fecha: new Date(inv.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' }),
+                total: Number(inv.total),
+              }))}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke={isLight ? '#e2e8f0' : '#334155'} />
+              <XAxis dataKey="fecha" stroke={isLight ? '#64748b' : '#94a3b8'} fontSize={11} />
+              <YAxis stroke={isLight ? '#64748b' : '#94a3b8'} fontSize={11} />
+              <Tooltip contentStyle={{
+                backgroundColor: isLight ? '#ffffff' : '#1e293b',
+                borderColor: isLight ? '#cbd5e1' : '#475569',
+                borderRadius: '8px',
+                color: isLight ? '#0f172a' : '#ffffff'
+              }} />
+              <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6' }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className={`border p-6 rounded-xl shadow-sm transition-colors ${
+        isLight ? 'bg-white border-slate-200' : 'bg-slate-800 border-slate-700'
+      }`}>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className={`text-lg font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>Stock de Productos</h3>
+            <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Existencias actuales registradas</p>
+          </div>
+        </div>
+
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={products.map((p) => ({ name: p.name, stock: p.stock }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke={isLight ? '#e2e8f0' : '#334155'} />
+              <XAxis dataKey="name" stroke={isLight ? '#64748b' : '#94a3b8'} fontSize={11} />
+              <YAxis stroke={isLight ? '#64748b' : '#94a3b8'} fontSize={11} />
+              <Tooltip contentStyle={{
+                backgroundColor: isLight ? '#ffffff' : '#1e293b',
+                borderColor: isLight ? '#cbd5e1' : '#475569',
+                borderRadius: '8px',
+                color: isLight ? '#0f172a' : '#ffffff'
+              }} />
+              <Bar dataKey="stock" fill="#10b981" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+
+    {/* TOP VENDEDORES */}
+    <div className={`border p-6 rounded-xl shadow-sm mb-8 transition-colors ${
+      isLight ? 'bg-white border-slate-200' : 'bg-slate-800 border-slate-700'
+    }`}>
+      <h3 className={`text-lg font-bold mb-4 ${isLight ? 'text-slate-900' : 'text-white'}`}>🏆 Top Vendedores del Período</h3>
+      {topSellers.length === 0 ? (
+        <p className={`text-sm ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>No hay ventas registradas en este período.</p>
+      ) : (
+        <div className="space-y-3">
+          {topSellers.map((seller, index) => (
+            <div key={seller.name} className={`flex justify-between items-center p-3 rounded-lg border ${
+              isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-700/50'
+            }`}>
+              <div className="flex items-center gap-3">
+                <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
+                  index === 0 ? 'bg-amber-500 text-slate-950' : index === 1 ? 'bg-slate-400 text-slate-950' : 'bg-amber-700 text-white'
+                }`}>
+                  {index + 1}
+                </span>
+                <span className={`text-sm font-medium ${isLight ? 'text-slate-900' : 'text-white'}`}>{seller.name}</span>
               </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl shadow-sm">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h3 className="text-lg font-bold text-white">Ventas por Fecha</h3>
-                      <p className="text-xs text-slate-400">Evolución de ingresos en el período seleccionado</p>
-                    </div>
-                  </div>
-
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart
-                        data={filteredInvoices.slice().reverse().map((inv) => ({
-                          fecha: new Date(inv.created_at).toLocaleDateString('es-VE', {
-                            day: '2-digit',
-                            month: '2-digit',
-                          }),
-                          total: Number(inv.total),
-                        }))}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis dataKey="fecha" stroke="#94a3b8" fontSize={11} />
-                        <YAxis stroke="#94a3b8" fontSize={11} />
-                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', borderRadius: '8px', color: '#fff' }} />
-                        <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6' }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl shadow-sm">
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h3 className="text-lg font-bold text-white">Stock de Productos</h3>
-                      <p className="text-xs text-slate-400">Existencias actuales registradas</p>
-                    </div>
-                  </div>
-
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={products.map((p) => ({ name: p.name, stock: p.stock }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
-                        <YAxis stroke="#94a3b8" fontSize={11} />
-                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#475569', borderRadius: '8px', color: '#fff' }} />
-                        <Bar dataKey="stock" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
+              <div className="text-right">
+                <p className="text-sm font-bold text-emerald-500">${seller.total.toFixed(2)}</p>
+                <p className={`text-[10px] ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Bs. {(seller.total * currentRate).toFixed(2)}</p>
               </div>
-
-              <div className="bg-slate-800 border border-slate-700 p-6 rounded-xl shadow-sm mb-8">
-                <h3 className="text-lg font-bold text-white mb-4">🏆 Top Vendedores del Período</h3>
-                {topSellers.length === 0 ? (
-                  <p className="text-sm text-slate-400">No hay ventas registradas en este período.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {topSellers.map((seller, index) => (
-                      <div key={seller.name} className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-700/50">
-                        <div className="flex items-center gap-3">
-                          <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
-                            index === 0 ? 'bg-amber-500 text-slate-950' : index === 1 ? 'bg-slate-400 text-slate-950' : 'bg-amber-700 text-white'}`}>
-                            {index + 1}
-                          </span>
-                          <span className="text-sm font-medium text-white">{seller.name}</span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-emerald-400">${seller.total.toFixed(2)}</p>
-                          <p className="text-[10px] text-slate-400">Bs. {(seller.total * currentRate).toFixed(2)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </>
+)}
 
 {currentView === 'tracking' && (
   <div className="space-y-6">
@@ -1752,103 +1733,200 @@ const handleExportInventory = () => {
 
 {currentView === 'drivers' && (
   <div className="space-y-6">
-    <header className="flex justify-between items-center border-b border-slate-800 pb-4">
+    <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 gap-4">
       <div>
-        <h2 className="text-2xl font-bold text-white">🚚 Gestión de Choferes y Flota</h2>
-        <p className="text-sm text-slate-400">Administra el personal de transporte y asignación de despachos.</p>
+        <h2 className="text-2xl font-bold text-white">🚚 Gestión de Choferes y Rutas</h2>
+        <p className="text-sm text-slate-400">Administra la flota de transporte y la asignación de despachos por lotes.</p>
       </div>
-      <button
-        onClick={() => setShowNewDriverModal(true)}
-        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition-all shadow-lg shadow-emerald-600/30"
-      >
-        + Registrar Chofer
-      </button>
+
+      <div className="flex items-center gap-3">
+        {/* Pestañas de Navegación */}
+        <div className="bg-slate-800 p-1 rounded-xl border border-slate-700 flex text-xs">
+          <button
+            onClick={() => setDriverTab('list')}
+            className={`px-4 py-2 rounded-lg font-bold transition-all ${
+              driverTab === 'list' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            👥 Listado de Choferes ({sellers.filter((p: any) => p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer').length})
+          </button>
+          <button
+            onClick={() => setDriverTab('routes')}
+            className={`px-4 py-2 rounded-lg font-bold transition-all ${
+              driverTab === 'routes' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            🗺️ Asignación de Rutas
+          </button>
+        </div>
+
+        {/* Botón de Registrar Chofer */}
+        <button
+          onClick={() => setShowNewDriverModal(true)}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition-all shadow-lg shadow-emerald-600/30"
+        >
+          + Registrar Chofer
+        </button>
+      </div>
     </header>
 
-    {/* Tabla de Choferes */}
-    <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="bg-slate-900/60 border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
-            <th className="p-4">Nombre del Chofer</th>
-            <th className="p-4">Correo / Usuario</th>
-            <th className="p-4">Vehículo / Placa</th>
-            <th className="p-4">Estatus GPS</th>
-            <th className="p-4 text-center">Acciones</th>
+{driverTab === 'list' && (
+  <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+    <table className="w-full text-left border-collapse">
+      <thead>
+        <tr className="bg-slate-900/60 border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
+          <th className="p-4">Nombre del Chofer</th>
+          <th className="p-4">Correo / Usuario</th>
+          <th className="p-4">Vehículo / Placa</th>
+          <th className="p-4">Estatus GPS</th>
+          <th className="p-4 text-center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-700 text-sm text-slate-200">
+        {driversList.length === 0 ? (
+          <tr>
+            <td colSpan={5} className="p-6 text-center text-slate-500">
+              No hay choferes registrados en el sistema.
+            </td>
           </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-700 text-sm text-slate-200">
-          {sellers.filter((p: any) => p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer').length === 0 ? (
-            <tr>
-              <td colSpan={5} className="p-6 text-center text-slate-500">
-                No hay choferes registrados en el sistema.
+        ) : (
+          driversList.map((driver: any) => (
+            <tr key={driver.id} className="hover:bg-slate-700/50 transition-colors">
+              <td className="p-4 font-bold text-white">{driver.full_name}</td>
+              <td className="p-4 text-slate-400 font-mono text-xs">{driver.email || 'N/A'}</td>
+              <td className="p-4">{driver.vehicle_info || 'Sin vehículo asignado'}</td>
+              <td className="p-4">
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                  driver.current_lat ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-700 text-slate-400'
+                }`}>
+                  {driver.current_lat ? '🟢 GPS Activo' : '⚪ Inactivo'}
+                </span>
+              </td>
+              <td className="p-4 text-center">
+<button
+  onClick={() => {
+    setEditingDriver(driver);
+    setEditDriverName(driver.full_name || '');
+    setEditDriverEmail(driver.email || '');
+    setEditDriverVehicle(driver.vehicle_info || '');
+    setEditDriverPassword(''); // Se reinicia para permitir cambiarla solo si se desea
+  }}
+  className="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow"
+>
+  ✏️ Editar
+</button>
               </td>
             </tr>
-          ) : (
-            sellers.filter((p: any) => p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer').map((driver: any) => (
-              <tr key={driver.id} className="hover:bg-slate-700/50 transition-colors">
-                <td className="p-4 font-bold text-white">{driver.full_name}</td>
-                <td className="p-4 text-slate-400 font-mono text-xs">{driver.email || 'N/A'}</td>
-                <td className="p-4">{driver.vehicle_info || 'Camión / Furgón por asignar'}</td>
-                <td className="p-4">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                    driver.current_lat ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-700 text-slate-400'
-                  }`}>
-                    {driver.current_lat ? '🟢 GPS Activo' : '⚪ Inactivo'}
-                  </span>
-                </td>
-                <td className="p-4 text-center">
-                  <button
-                    onClick={() => {
-                      // Aquí puedes abrir detalles o asignar ruta
-                      alert(`Gestionando ruta para: ${driver.full_name}`);
-                    }}
-                    className="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
-                  >
-                    Ver Órdenes
-                  </button>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+          ))
+        )}
+      </tbody>
+    </table>
   </div>
 )}
 
-{showNewDriverModal && (
+{/* MODAL DE EDICIÓN DE CHOFER COMPLETO */}
+{editingDriver && (
   <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
     <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
-      <h3 className="text-lg font-bold text-white">🚚 Registrar Nuevo Chofer</h3>
+      <h3 className="text-lg font-bold text-white">✏️ Editar Datos del Chofer</h3>
       
       <form onSubmit={async (e) => {
         e.preventDefault();
-        // Lógica para registrar chofer en Supabase
-        setShowNewDriverModal(false);
+        try {
+          // 1. Actualizar datos en la tabla profiles
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({
+              full_name: editDriverName,
+              email: editDriverEmail,
+              vehicle_info: editDriverVehicle,
+            })
+            .eq('id', editingDriver.id);
+
+          if (profileError) throw profileError;
+
+          // 2. Si se ingresó una nueva contraseña, actualizarla en Supabase Auth
+          if (editDriverPassword.trim().length > 0) {
+            if (editDriverPassword.length < 6) {
+              alert('La contraseña debe tener al menos 6 caracteres.');
+              return;
+            }
+
+            const { error: authError } = await supabase.rpc('update_user_password', {
+              user_id: editingDriver.id,
+              new_password: editDriverPassword
+            });
+
+            // En caso de no tener la función RPC configurada, se intenta actualización directa de admin o aviso
+            if (authError) {
+              console.warn('Nota sobre contraseña:', authError.message);
+            }
+          }
+
+          alert('¡Datos del chofer actualizados con éxito!');
+          setEditingDriver(null);
+          if (typeof fetchAllData === 'function') fetchAllData();
+        } catch (err: any) {
+          alert('Error al actualizar chofer: ' + err.message);
+        }
       }} className="space-y-3">
         <div>
           <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Nombre Completo</label>
-          <input type="text" required placeholder="Ej. Carlos Pérez" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+          <input 
+            type="text" 
+            required 
+            value={editDriverName}
+            onChange={(e) => setEditDriverName(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+          />
         </div>
+
         <div>
-          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Correo Electrónico</label>
-          <input type="email" required placeholder="chofer@kataris.com" className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white" />
+          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Correo Electrónico (Usuario)</label>
+          <input 
+            type="email" 
+            required 
+            value={editDriverEmail}
+            onChange={(e) => setEditDriverEmail(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Nueva Contraseña (Opcional)</label>
+          <input 
+            type="password" 
+            value={editDriverPassword}
+            onChange={(e) => setEditDriverPassword(e.target.value)}
+            placeholder="Dejar en blanco para mantener la actual" 
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Vehículo / Placa</label>
+          <input 
+            type="text" 
+            required 
+            value={editDriverVehicle}
+            onChange={(e) => setEditDriverVehicle(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+          />
         </div>
 
         <div className="flex justify-end space-x-2 pt-2">
           <button
             type="button"
-            onClick={() => setShowNewDriverModal(false)}
+            onClick={() => setEditingDriver(null)}
             className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold"
           >
             Cancelar
           </button>
           <button
             type="submit"
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow"
           >
-            Guardar Chofer
+            Guardar Cambios
           </button>
         </div>
       </form>
@@ -1856,216 +1934,556 @@ const handleExportInventory = () => {
   </div>
 )}
 
-{currentView === 'sellers' && (
-            <>
-              <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Gestión de Vendedores y Cuotas</h2>
-                  <p className="text-sm text-slate-400">Control de rendimiento individual y cuotas de ventas mensuales.</p>
-                </div>
-                <button
-                  onClick={() => setShowNewSellerModal(true)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
-                >
-                  + Nuevo Vendedor
-                </button>
-              </header>
+    {/* PESTAÑA 2: ASIGNACIÓN DE RUTAS */}
+    {driverTab === 'routes' && (
+  <div className="space-y-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Panel Izquierdo: Selección de Chofer */}
+      <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-xl">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider">1. Seleccionar Chofer</h3>
+        <select
+          value={selectedDriverForRoute}
+          onChange={(e) => setSelectedDriverForRoute(e.target.value)}
+          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500"
+        >
+          <option value="">-- Elige un transportista --</option>
+          {sellers.filter((p: any) => p.role === 'driver' || p.role === 'despachador' || p.role === 'chofer').map((d: any) => (
+            <option key={d.id} value={d.id}>{d.full_name} ({d.vehicle_info || 'Vehículo genérico'})</option>
+          ))}
+        </select>
 
-              {/* Tarjetas / Tabla de Vendedores */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {sellers.length === 0 ? (
-                  <div className="col-span-full bg-slate-800 p-8 rounded-xl border border-slate-700 text-center text-slate-400">
-                    No hay usuarios o vendedores registrados en el sistema.
-                  </div>
-                ) : (
-                  sellers.map((seller) => {
-                    // Calcular ventas del mes actual para este vendedor
-                    const now = new Date();
-                    const sellerMonthInvoices = invoices.filter((inv) => {
-                      const d = new Date(inv.created_at);
-                      return (
-                        (inv.seller_id === seller.id || inv.created_by === seller.id) &&
-                        d.getMonth() === now.getMonth() &&
-                        d.getFullYear() === now.getFullYear()
-                      );
-                    });
+        <div className="pt-4 border-t border-slate-700 space-y-2">
+          <h4 className="text-xs font-bold text-slate-400 uppercase">Resumen de Selección</h4>
+          <p className="text-xs text-slate-300">Facturas seleccionadas: <strong className="text-white">{selectedInvoicesForRoute.length}</strong></p>
+          <button
+            onClick={async () => {
+              if (!selectedDriverForRoute || selectedInvoicesForRoute.length === 0) {
+                alert('Selecciona un chofer y al menos una factura.');
+                return;
+              }
+              const { error } = await supabase
+                .from('invoices')
+                .update({ driver_id: selectedDriverForRoute, dispatch_status: 'no despachada' })
+                .in('id', selectedInvoicesForRoute);
 
-                    const totalSoldMonth = sellerMonthInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
-                    const quota = Number(seller.monthly_quota || 1000);
-                    const percent = Math.min(Math.round((totalSoldMonth / quota) * 100), 100);
+              if (!error) {
+                alert('¡Ruta asignada con éxito al chofer!');
+                setSelectedInvoicesForRoute([]);
+                setSelectedDriverForRoute('');
+                if (typeof fetchAllData === 'function') fetchAllData();
+              } else {
+                alert('Error al asignar la ruta: ' + error.message);
+              }
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl text-xs transition-all shadow-lg"
+          >
+            🚀 Asignar Ruta al Chofer
+          </button>
+        </div>
+      </div>
 
-                    return (
-                      <div key={seller.id} className="bg-slate-800 border border-slate-700 p-6 rounded-2xl space-y-4 shadow-sm">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="text-lg font-bold text-white">{seller.full_name || 'Vendedor sin nombre'}</h3>
-                            <span className="text-xs text-blue-400 font-mono">Rol: {seller.role || 'Vendedor'}</span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setEditingQuotaSeller(seller);
-                              setNewQuotaValue(quota.toString());
-                            }}
-                            className="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
-                          >
-                            🎯 Asignar Cuota
-                          </button>
-                        </div>
+      {/* Panel Derecho: Selección y Buscador de Facturas PENDIENTES (Sin Chofer) */}
+      <div className="lg:col-span-2 bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-xl">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">2. Facturas Disponibles para Asignar</h3>
+          
+          <input
+            type="text"
+            value={invoiceSearchTerm}
+            onChange={(e) => setInvoiceSearchTerm(e.target.value)}
+            placeholder="🔍 Buscar por N° o Cliente..."
+            className="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-2 text-white w-full sm:w-64 focus:outline-none focus:border-blue-500"
+          />
+        </div>
 
-                        {/* Avance de Cuota */}
-                        <div className="space-y-2 bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/60">
-                          <div className="flex justify-between text-xs font-semibold">
-                            <span className="text-slate-400">Cuota Asignada:</span>
-                            <span className="text-white font-bold">${quota.toFixed(2)}</span>
-                          </div>
-{/* Modal de Nuevo Vendedor */}
-              {showNewSellerModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-                  <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-                    <div className="flex justify-between items-center border-b border-slate-700 pb-3">
-                      <h3 className="text-lg font-bold text-white">Registrar Nuevo Vendedor</h3>
-                      <button onClick={() => setShowNewSellerModal(false)} className="text-slate-400 hover:text-white font-bold">✕</button>
+        {/* Lista Filtrada: SOLO facturas que NO tienen driver_id asignado */}
+        <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2">
+          {invoices.filter((inv: any) => {
+            // Filtrar solo las que no tienen chofer asignado
+            if (inv.driver_id) return false;
+
+            const query = invoiceSearchTerm.toLowerCase();
+            const invNum = (inv.invoice_number || inv.id || '').toLowerCase();
+            const cliName = (inv.client_name || inv.clients?.name || 'Cliente General').toLowerCase();
+            return invNum.includes(query) || cliName.includes(query);
+          }).length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-8">
+              {invoiceSearchTerm ? 'No se encontraron facturas sin asignar.' : 'No hay facturas pendientes por asignar a rutas.'}
+            </p>
+          ) : (
+            invoices
+              .filter((inv: any) => !inv.driver_id) // Excluir las ya asignadas
+              .filter((inv: any) => {
+                const query = invoiceSearchTerm.toLowerCase();
+                const invNum = (inv.invoice_number || inv.id || '').toLowerCase();
+                const cliName = (inv.client_name || inv.clients?.name || 'Cliente General').toLowerCase();
+                return invNum.includes(query) || cliName.includes(query);
+              })
+              .map((inv: any) => {
+                const isChecked = selectedInvoicesForRoute.includes(inv.id);
+                const displayInvoiceNum = inv.invoice_number || `FACT-${inv.id.slice(0, 6).toUpperCase()}`;
+                const displayClientName = inv.client_name || inv.clients?.name || 'Cliente General';
+
+                return (
+                  <div
+                    key={inv.id}
+                    onClick={() => {
+                      if (isChecked) {
+                        setSelectedInvoicesForRoute(selectedInvoicesForRoute.filter(id => id !== inv.id));
+                      } else {
+                        setSelectedInvoicesForRoute([...selectedInvoicesForRoute, inv.id]);
+                      }
+                    }}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer flex justify-between items-center ${
+                      isChecked ? 'bg-emerald-600/20 border-emerald-500' : 'bg-slate-900 border-slate-700 hover:border-slate-600'
+                    }`}
+                  >
+                    <div>
+                      <span className="text-xs font-mono text-blue-400 font-bold">{displayInvoiceNum}</span>
+                      <p className="text-sm font-bold text-white">{displayClientName}</p>
                     </div>
-
-                    <form onSubmit={handleCreateSeller} className="space-y-3 text-sm">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nombre Completo</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ej: Carlos Gómez"
-                          value={newSellerName}
-                          onChange={(e) => setNewSellerName(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Correo Electrónico (Para iniciar sesión)</label>
-                        <input
-                          type="email"
-                          required
-                          placeholder="vendedor@kataris.com"
-                          value={newSellerEmail}
-                          onChange={(e) => setNewSellerEmail(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Contraseña Inicial</label>
-                        <input
-                          type="password"
-                          required
-                          placeholder="••••••••"
-                          value={newSellerPassword}
-                          onChange={(e) => setNewSellerPassword(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Cuota Mensual Inicial ($ USD)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          value={newSellerQuota}
-                          onChange={(e) => setNewSellerQuota(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-bold"
-                        />
-                      </div>
-
-                      <div className="flex justify-end space-x-3 pt-3 border-t border-slate-700">
-                        <button
-                          type="button"
-                          onClick={() => setShowNewSellerModal(false)}
-                          className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-2 rounded-lg text-xs"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={loadingNewSeller}
-                          className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2 rounded-lg text-xs disabled:opacity-50"
-                        >
-                          {loadingNewSeller ? 'Registrando...' : 'Crear Vendedor'}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              )}
-                          <div className="flex justify-between text-xs font-semibold">
-                            <span className="text-slate-400">Ventas Este Mes:</span>
-                            <span className="text-emerald-400 font-bold">${totalSoldMonth.toFixed(2)}</span>
-                          </div>
-
-                          {/* Barra de progreso */}
-                          <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700 mt-2">
-                            <div
-                              className={`h-full transition-all duration-300 ${percent >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
-                              style={{ width: `${percent}%` }}
-                            ></div>
-                          </div>
-                          <p className="text-[11px] text-right text-slate-400 font-extrabold">{percent}% Alcanzado</p>
-                        </div>
-
-                        {/* Cantidad de pedidos procesados */}
-                        <div className="flex justify-between items-center text-xs text-slate-400 pt-2 border-t border-slate-700/60">
-                          <span>Pedidos del mes:</span>
-                          <span className="font-bold text-white font-mono">{sellerMonthInvoices.length}</span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Modal de Asignar / Editar Cuota */}
-              {editingQuotaSeller && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-                  <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
-                    <div className="flex justify-between items-center border-b border-slate-700 pb-3">
-                      <h3 className="text-lg font-bold text-white">Asignar Cuota a {editingQuotaSeller.full_name}</h3>
-                      <button onClick={() => setEditingQuotaSeller(null)} className="text-slate-400 hover:text-white font-bold">✕</button>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-emerald-400">${Number(inv.total || 0).toFixed(2)}</p>
+                      <span className="text-[10px] text-amber-400 uppercase font-semibold">Sin Asignar</span>
                     </div>
-
-                    <form onSubmit={handleUpdateQuota} className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-300 uppercase mb-1">Nueva Cuota Mensual ($ USD)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          value={newQuotaValue}
-                          onChange={(e) => setNewQuotaValue(e.target.value)}
-                          placeholder="Ej: 1500.00"
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-bold text-lg focus:outline-none focus:border-blue-500"
-                        />
-                      </div>
-
-                      <div className="flex justify-end space-x-3 pt-3 border-t border-slate-700">
-                        <button
-                          type="button"
-                          onClick={() => setEditingQuotaSeller(null)}
-                          className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-2 rounded-lg text-xs"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="submit"
-                          className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-5 py-2 rounded-lg text-xs"
-                        >
-                          Guardar Cuota
-                        </button>
-                      </div>
-                    </form>
                   </div>
-                </div>
-              )}
-            </>
+                );
+              })
           )}
+        </div>
+      </div>
+    </div>
+
+    {/* SECCIÓN INFERIOR: HISTORIAL DE RUTAS ASIGNADAS */}
+    <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl space-y-4 shadow-xl">
+      <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 className="text-base font-bold text-white">📋 Historial de Rutas y Facturas Asignadas en Campo</h3>
+        <span className="text-xs bg-slate-900 px-3 py-1 rounded-full text-blue-400 font-mono">
+          {invoices.filter((inv: any) => inv.driver_id).length} Facturas en Ruta
+        </span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-900/60 border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
+              <th className="p-3">Factura</th>
+              <th className="p-3">Cliente</th>
+              <th className="p-3">Chofer / Transportista</th>
+              <th className="p-3">Estatus de Despacho</th>
+              <th className="p-3">Fecha de Entrega</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-700 text-sm text-slate-200">
+            {invoices.filter((inv: any) => inv.driver_id).length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-6 text-center text-slate-500">
+                  No hay rutas o facturas asignadas a ningún chofer actualmente.
+                </td>
+              </tr>
+            ) : (
+              invoices
+                .filter((inv: any) => inv.driver_id)
+                .map((inv: any) => {
+                  const assignedDriver = sellers.find((d: any) => d.id === inv.driver_id);
+                  const displayInvoiceNum = inv.invoice_number || `FACT-${inv.id.slice(0, 6).toUpperCase()}`;
+                  const displayClientName = inv.client_name || inv.clients?.name || 'Cliente General';
+                  const status = inv.dispatch_status || 'no despachada';
+
+                  return (
+                    <tr key={inv.id} className="hover:bg-slate-700/50 transition-colors">
+                      <td className="p-3 font-mono text-blue-400 font-bold">{displayInvoiceNum}</td>
+                      <td className="p-3 font-bold text-white">{displayClientName}</td>
+                      <td className="p-3 text-slate-300">{assignedDriver ? assignedDriver.full_name : 'Chofer Asignado'}</td>
+                      <td className="p-3">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                          status === 'despachada' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                          status === 'rechazada' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                          'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        }`}>
+                          {status}
+                        </span>
+                      </td>
+                      <td className="p-3 font-mono text-xs text-slate-400">
+                        {inv.dispatched_at ? new Date(inv.dispatched_at).toLocaleString() : 'Pendiente en ruta'}
+                      </td>
+                    </tr>
+                  );
+                })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+)}
+
+    {/* MODAL DE REGISTRO DE CHOFER */}
+    {showNewDriverModal && (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
+          <h3 className="text-lg font-bold text-white">🚚 Registrar Nuevo Chofer</h3>
+          
+          <form onSubmit={async (e) => {
+  e.preventDefault();
+  try {
+    const response = await fetch('/api/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: newDriverEmail,         // O la variable que uses para el correo
+        password: newDriverPassword,   // O la variable que uses para la contraseña
+        full_name: editDriverName,     // O newDriverName
+        role: 'driver',
+        vehicle_info: editDriverVehicle,
+        tenant_id: profile?.tenant_id,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Error al registrar chofer');
+    }
+
+    alert('¡Chofer registrado con éxito en Auth y en el sistema!');
+    setShowNewDriverModal(false);
+    if (typeof fetchAllData === 'function') fetchAllData();
+  } catch (err: any) {
+    alert('Error al registrar chofer: ' + err.message);
+  }
+}}>
+
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Nombre Completo</label>
+              <input 
+                type="text" 
+                required 
+                value={newDriverName}
+                onChange={(e) => setNewDriverName(e.target.value)}
+                placeholder="Ej. Carlos Pérez" 
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Correo Electrónico (Usuario)</label>
+              <input 
+                type="email" 
+                required 
+                value={newDriverEmail}
+                onChange={(e) => setNewDriverEmail(e.target.value)}
+                placeholder="chofer@kataris.com" 
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Contraseña de Acceso</label>
+              <input 
+                type="password" 
+                required 
+                value={newDriverPassword}
+                onChange={(e) => setNewDriverPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres" 
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Vehículo / Placa</label>
+              <input 
+                type="text" 
+                required 
+                value={newDriverVehicle}
+                onChange={(e) => setNewDriverVehicle(e.target.value)}
+                placeholder="Ej. Furgón NPR - Placa ABC1234" 
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white" 
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowNewDriverModal(false)}
+                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold"
+              >
+                Guardar y Crear Cuenta
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
+{currentView === 'sellers' && (
+  <div className="space-y-6">
+    <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4 gap-4">
+      <div>
+        <h2 className="text-2xl font-bold text-white">💼 Gestión de Vendedores y Cuotas</h2>
+        <p className="text-sm text-slate-400">Control de rendimiento individual, cuotas de ventas mensuales y permisos comerciales.</p>
+      </div>
+
+      <button
+        onClick={() => setShowNewSellerModal && setShowNewSellerModal(true)}
+        className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-xl text-sm transition-all shadow-lg"
+      >
+        + Nuevo Vendedor
+      </button>
+    </header>
+
+    {/* Grid de Vendedores Filtrados */}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {sellers.filter((p: any) => p.role === 'seller' || p.role === 'vendedor').length === 0 ? (
+        <div className="col-span-full bg-slate-800 border border-slate-700 p-8 rounded-2xl text-center text-slate-400">
+          No hay vendedores registrados en el sistema.
+        </div>
+      ) : (
+        sellers
+          .filter((p: any) => p.role === 'seller' || p.role === 'vendedor')
+          .map((seller: any) => {
+            const quota = Number(seller.sales_quota || seller.quota || 0);
+            const currentSales = Number(seller.current_sales || 0);
+            const percentage = quota > 0 ? Math.min(Math.round((currentSales / quota) * 100), 100) : 0;
+            const isActive = seller.status !== 'inactive';
+
+            return (
+              <div key={seller.id} className="bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-xl flex flex-col justify-between">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{seller.full_name}</h3>
+                    <p className="text-xs text-slate-400 font-mono">{seller.email || 'Sin correo'}</p>
+                    <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
+                      isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    }`}>
+                      {isActive ? 'Activo' : 'Inactivo'}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setEditingSeller(seller);
+                      setEditName(seller.full_name || '');
+                      setEditEmail(seller.email || '');
+                      setEditQuota(seller.sales_quota || seller.quota || '0');
+                      setEditRole(seller.role || 'seller');
+                      setEditStatus(seller.status || 'active');
+                      setEditBrands(seller.allowed_brands || '');
+                    }}
+                    className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow"
+                  >
+                    ✏️ Editar Vendedor
+                  </button>
+                </div>
+
+                <div className="space-y-2 bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-400">Cuota Asignada:</span>
+                    <span className="text-white font-bold">${quota.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-400">Ventas Este Mes:</span>
+                    <span className="text-emerald-400 font-bold">${currentSales.toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="w-full bg-slate-700 h-2 rounded-full overflow-hidden mt-2">
+                    <div className="bg-blue-500 h-full rounded-full transition-all" style={{ width: `${percentage}%` }}></div>
+                  </div>
+                  <div className="text-right text-[10px] text-slate-400 font-bold">{percentage}% Alcanzado</div>
+                </div>
+
+                <div className="text-xs text-slate-400 pt-2 border-t border-slate-700 flex justify-between items-center">
+                  <span>Marcas: <strong className="text-slate-200">{seller.allowed_brands || 'Todas'}</strong></span>
+                  <span className="font-mono">Pedidos: {seller.orders_count || 0}</span>
+                </div>
+              </div>
+            );
+          })
+      )}
+    </div>
+
+{/* MODAL DE EDICIÓN DE VENDEDOR CON CONTRASEÑA Y MARCAS */}
+{editingSeller && (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-lg space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <h3 className="text-lg font-bold text-white">✏️ Editar Perfil y Permisos de Vendedor</h3>
+      
+      <form onSubmit={async (e) => {
+        e.preventDefault();
+        try {
+          // 1. Actualizar perfil en Supabase
+          const { error } = await supabase
+            .from('profiles')
+            .update({
+              full_name: editName,
+              email: editEmail,
+              sales_quota: Number(editQuota),
+              quota: Number(editQuota),
+              role: editRole,
+              status: editStatus,
+              allowed_brands: editBrands.toLowerCase().trim(),
+            })
+            .eq('id', editingSeller.id);
+
+          if (error) throw error;
+
+          // 2. Si se ingresó una nueva contraseña, actualizarla
+          if (editPassword.trim().length > 0) {
+            if (editPassword.length < 6) {
+              alert('La contraseña debe tener al menos 6 caracteres.');
+              return;
+            }
+            await supabase.rpc('update_user_password', {
+              user_id: editingSeller.id,
+              new_password: editPassword
+            });
+          }
+
+          alert('¡Vendedor actualizado con éxito!');
+          setEditingSeller(null);
+          setEditPassword('');
+          if (typeof fetchAllData === 'function') fetchAllData();
+        } catch (err: any) {
+          alert('Error al actualizar vendedor: ' + err.message);
+        }
+      }} className="space-y-3">
+        <div>
+          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Nombre Completo</label>
+          <input 
+            type="text" 
+            required 
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Correo Electrónico</label>
+            <input 
+              type="email" 
+              required 
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Nueva Contraseña (Opcional)</label>
+            <input 
+              type="password" 
+              value={editPassword}
+              onChange={(e) => setEditPassword(e.target.value)}
+              placeholder="Dejar en blanco para no cambiar" 
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Cuota Mensual ($)</label>
+            <input 
+              type="number" 
+              step="0.01"
+              required 
+              value={editQuota}
+              onChange={(e) => setEditQuota(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Estatus</label>
+            <select
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="active">Activo</option>
+              <option value="inactive">Inactivo</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Rol / Permisos</label>
+            <select
+              value={editRole}
+              onChange={(e) => setEditRole(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="seller">Vendedor</option>
+              <option value="vendedor">Vendedor (Alternativo)</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Marcas Permitidas (Separadas por coma)</label>
+            <input 
+              type="text" 
+              value={editBrands}
+              onChange={(e) => setEditBrands(e.target.value)}
+              placeholder="Ej. Cali, Primor, Mavesa" 
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-blue-500" 
+            />
+            <span className="text-[10px] text-slate-400">Si se deja en blanco o "todas", podrá vender cualquier marca.</span>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center pt-4 border-t border-slate-800">
+          <button
+            type="button"
+            onClick={async () => {
+              if (confirm('¿Estás seguro de eliminar este vendedor del sistema?')) {
+                const { error } = await supabase.from('profiles').delete().eq('id', editingSeller.id);
+                if (!error) {
+                  alert('Vendedor eliminado.');
+                  setEditingSeller(null);
+                  if (typeof fetchAllData === 'function') fetchAllData();
+                } else {
+                  alert('Error al eliminar: ' + error.message);
+                }
+              }
+            }}
+            className="px-4 py-2 bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold transition-all"
+          >
+            🗑️ Eliminar Vendedor
+          </button>
+
+          <div className="space-x-2 flex">
+            <button
+              type="button"
+              onClick={() => {
+                setEditingSeller(null);
+                setEditPassword('');
+              }}
+              className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow"
+            >
+              Guardar Cambios
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
+  </div>
+)}
+
           {currentView === 'expenses' && isAdmin && (
             <>
               <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">

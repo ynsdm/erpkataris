@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase'; // Ajusta la ruta de importación si está en otra subcarpeta
+import { supabase } from '@/app/lib/supabase';
 
 export default function DespachosPage() {
   const [session, setSession] = useState<any>(null);
@@ -11,15 +11,16 @@ export default function DespachosPage() {
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [deliveryNotes, setDeliveryNotes] = useState<{ [key: string]: string }>({});
+  
+  // Estado para el Modo Oscuro / Claro
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // 1. Cargar sesión y datos iniciales del chofer en ruta
   useEffect(() => {
     const initDespachos = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
 
       if (session?.user) {
-        // Cargar perfil del chofer
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
@@ -28,20 +29,28 @@ export default function DespachosPage() {
         
         setProfile(profileData);
 
-        // Cargar facturas asignadas o pendientes
         const { data: invoicesData } = await supabase
           .from('invoices')
           .select('*')
+          .eq('driver_id', session.user.id)
           .order('created_at', { ascending: false });
         
-        if (invoicesData) setInvoices(invoicesData);
+        if (invoicesData) {
+          setInvoices(invoicesData);
 
-        // Cargar clientes con sus coordenadas GPS
-        const { data: clientsData } = await supabase
-          .from('clients')
-          .select('*');
-        
-        if (clientsData) setClients(clientsData);
+          const assignedClientIds = Array.from(new Set(invoicesData.map((inv: any) => inv.client_id || inv.client_name)));
+
+          const { data: clientsData } = await supabase
+            .from('clients')
+            .select('*');
+
+          if (clientsData) {
+            const filteredClients = clientsData.filter((c: any) => 
+              assignedClientIds.includes(c.id) || assignedClientIds.includes(c.name)
+            );
+            setClients(filteredClients);
+          }
+        }
       }
       setLoading(false);
     };
@@ -49,7 +58,7 @@ export default function DespachosPage() {
     initDespachos();
   }, []);
 
-  // 2. Transmitir ubicación GPS del chofer en tiempo real
+  // Transmitir ubicación GPS
   useEffect(() => {
     if (profile?.id && navigator.geolocation) {
       const watchId = navigator.geolocation.watchPosition(
@@ -69,18 +78,9 @@ export default function DespachosPage() {
     }
   }, [profile]);
 
-  // 3. Algoritmo de proximidad: Ordenar clientes según cercanía a la posición actual del chofer
-  const sortedClients = [...clients].sort((a, b) => {
-    const driverLat = profile?.current_lat || 10.6427;
-    const driverLng = profile?.current_lng || -71.6125;
+  const mapLat = selectedClient?.lat || profile?.current_lat || 10.6427;
+  const mapLng = selectedClient?.lng || profile?.current_lng || -71.6125;
 
-    const distA = Math.hypot((a.lat || 10.6427) - driverLat, (a.lng || -71.6125) - driverLng);
-    const distB = Math.hypot((b.lat || 10.6427) - driverLat, (b.lng || -71.6125) - driverLng);
-
-    return distA - distB;
-  });
-
-  // Actualizar estatus de factura en ruta
   const handleUpdateStatus = async (invoiceId: string, newStatus: string) => {
     const now = new Date().toISOString();
     const note = deliveryNotes[invoiceId] || '';
@@ -102,62 +102,88 @@ export default function DespachosPage() {
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/';
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
-        <p className="animate-pulse">Cargando módulo de despachos en ruta...</p>
+      <div className={`min-h-screen flex items-center justify-center ${theme === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-white'}`}>
+        <p className="animate-pulse">Cargando tu hoja de ruta y entregas asignadas...</p>
       </div>
     );
   }
 
-  const currentLat = profile?.current_lat || 10.6427;
-  const currentLng = profile?.current_lng || -71.6125;
+  const isLight = theme === 'light';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-4 md:p-6 space-y-6">
-      {/* Header del Móvil / Chofer */}
-      <header className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl">
+    <div className={`min-h-screen p-4 md:p-6 space-y-6 transition-colors duration-300 ${isLight ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-white'}`}>
+      
+      {/* HEADER CON CONTROLES */}
+      <header className={`border p-6 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
         <div>
           <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-            Módulo Exclusivo Choferes / Ruta Activa
+            App Móvil Chofer / Despachos Asignados
           </span>
-          <h1 className="text-2xl font-bold mt-1">🚚 Panel de Despachos en Ruta</h1>
-          <p className="text-sm text-slate-400">Ruta organizada automáticamente por proximidad GPS.</p>
+          <h1 className="text-2xl font-bold mt-1">🚚 Mi Ruta de Entregas</h1>
+          <p className={`text-sm ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Mostrando solo facturas asignadas a tu vehículo.</p>
         </div>
-        <div className="bg-slate-800 px-4 py-2 rounded-xl border border-slate-700 text-xs text-slate-300 flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Chofer: <strong className="text-white">{profile?.full_name || session?.user?.email}</strong></span>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className={`px-4 py-2 rounded-xl border text-xs flex items-center space-x-2 ${isLight ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Chofer: <strong className={isLight ? 'text-slate-900' : 'text-white'}>{profile?.full_name || session?.user?.email}</strong></span>
+          </div>
+
+          {/* Botón Cambiar Tema */}
+          <button
+            onClick={() => setTheme(isLight ? 'dark' : 'light')}
+            className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${
+              isLight 
+                ? 'bg-slate-200 hover:bg-slate-300 text-slate-800 border-slate-300' 
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+            }`}
+          >
+            {isLight ? '🌙 Modo Oscuro' : '☀️ Modo Claro'}
+          </button>
+
+          {/* Botón Salir */}
+          <button
+            onClick={handleLogout}
+            className="bg-red-600 hover:bg-red-500 text-white text-xs font-semibold px-3 py-2 rounded-xl transition-colors shadow"
+          >
+            🚪 Salir
+          </button>
         </div>
       </header>
 
-      {/* Grid Principal: Mapa y Lista de Paradas */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Mapa Interactivo de OpenStreetMap */}
-        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl h-[500px] overflow-hidden relative shadow-inner">
+        {/* Mapa */}
+        <div className={`lg:col-span-7 border rounded-2xl h-[500px] overflow-hidden relative shadow-inner ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
           <iframe
-            title="Mapa de Ruta y Clientes"
+            title="Mapa de Entregas Asignadas"
             width="100%"
             height="100%"
             className="border-0 grayscale contrast-125 opacity-90 hover:grayscale-0 transition-all duration-500"
-            src={`https://www.openstreetmap.org/export/embed.html?bbox=${currentLng - 0.04}%2C${currentLat - 0.04}%2C${currentLng + 0.04}%2C${currentLat + 0.04}&layer=mapnik&marker=${currentLat}%2C${currentLng}`}
+            src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapLng - 0.02}%2C${mapLat - 0.02}%2C${mapLng + 0.02}%2C${mapLat + 0.02}&layer=mapnik&marker=${mapLat}%2C${mapLng}`}
           />
-          <div className="absolute top-4 right-4 bg-slate-950/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-xl text-xs shadow-lg">
-            📍 Tu posición GPS transmitiéndose en vivo
+          <div className={`absolute top-4 right-4 backdrop-blur-md border px-4 py-2 rounded-xl text-xs shadow-lg ${isLight ? 'bg-white/90 border-slate-200 text-slate-800' : 'bg-slate-950/90 border-slate-800 text-white'}`}>
+            📍 {selectedClient ? `Ubicación GPS: ${selectedClient.name}` : 'Posición del Chofer'}
           </div>
         </div>
 
-        {/* Lista de Clientes en Ruta (Ordenados por Proximidad) */}
-        <div className="lg:col-span-5 bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3 flex flex-col h-[500px]">
+        {/* Lista de Clientes */}
+        <div className={`lg:col-span-5 border p-4 rounded-2xl space-y-3 flex flex-col h-[500px] ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            📍 Ruta Optimizada por Proximidad ({sortedClients.length} Clientes)
+            📍 Clientes Asignados ({clients.length})
           </h2>
 
           <div className="space-y-2 overflow-y-auto flex-1 pr-1">
-            {sortedClients.length === 0 ? (
-              <p className="text-xs text-slate-500 text-center py-8">No hay clientes con ubicación registrada.</p>
+            {clients.length === 0 ? (
+              <p className="text-xs text-slate-500 text-center py-8">No tienes facturas de despacho asignadas en este momento.</p>
             ) : (
-              sortedClients.map((client) => {
+              clients.map((client) => {
                 const clientInvoices = invoices.filter(inv => inv.client_id === client.id || inv.client_name === client.name);
                 const isSelected = selectedClient?.id === client.id;
 
@@ -167,17 +193,19 @@ export default function DespachosPage() {
                     onClick={() => setSelectedClient(client)}
                     className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1 ${
                       isSelected 
-                        ? 'bg-blue-600/10 border-blue-500 shadow-lg' 
-                        : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                        ? 'bg-blue-600/20 border-blue-500 shadow-lg' 
+                        : isLight 
+                          ? 'bg-slate-50 border-slate-200 hover:border-slate-300' 
+                          : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
                     }`}
                   >
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-white text-sm">{client.name}</span>
-                      <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-blue-400 font-mono">
+                      <span className={`font-bold text-sm ${isLight ? 'text-slate-900' : 'text-white'}`}>{client.name}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-mono ${isLight ? 'bg-slate-200 text-blue-600' : 'bg-slate-800 text-blue-400'}`}>
                         {clientInvoices.length} Facturas
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 truncate">Dirección: {client.address || 'Sin dirección'}</p>
+                    <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'} truncate`}>📍 {client.address || 'Ubicación registrada'}</p>
                   </div>
                 );
               })
@@ -186,78 +214,72 @@ export default function DespachosPage() {
         </div>
       </div>
 
-      {/* Sección Inferior: Facturas del Cliente Seleccionado en el Mapa/Lista */}
-      <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl space-y-4 shadow-xl">
-        <h2 className="text-lg font-bold text-white flex items-center space-x-2">
-          <span>📦 Facturas Asignadas al Cliente:</span>
-          <span className="text-blue-400">{selectedClient ? selectedClient.name : 'Selecciona un cliente arriba'}</span>
+      {/* Gestión de Facturas */}
+      <div className={`border p-6 rounded-2xl space-y-4 shadow-xl ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+        <h2 className="text-lg font-bold flex items-center space-x-2">
+          <span>📦 Facturas del Cliente:</span>
+          <span className="text-blue-500">{selectedClient ? selectedClient.name : 'Selecciona un cliente arriba'}</span>
         </h2>
 
         {!selectedClient ? (
-          <p className="text-sm text-slate-500 py-6 text-center">Haz clic en un cliente de la lista de ruta para ver sus facturas pendientes de entrega.</p>
+          <p className="text-sm text-slate-400 py-6 text-center">Selecciona un cliente de tu lista para ver sus facturas y registrar la entrega.</p>
         ) : (
           <div className="space-y-4">
-            {invoices.filter(inv => inv.client_id === selectedClient.id || inv.client_name === selectedClient.name).length === 0 ? (
-              <p className="text-sm text-slate-500 py-4 text-center">Este cliente no tiene facturas pendientes.</p>
-            ) : (
-              invoices
-                .filter(inv => inv.client_id === selectedClient.id || inv.client_name === selectedClient.name)
-                .map((inv) => {
-                  const status = inv.dispatch_status || 'no despachada';
+            {invoices
+              .filter(inv => inv.client_id === selectedClient.id || inv.client_name === selectedClient.name)
+              .map((inv) => {
+                const status = inv.dispatch_status || 'no despachada';
 
-                  return (
-                    <div key={inv.id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
-                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-slate-800 pb-3">
-                        <div>
-                          <span className="text-xs font-mono text-blue-400 font-bold">FACTURA #{inv.id.slice(0, 8)}</span>
-                          <p className="text-base font-bold text-white">${Number(inv.total || 0).toFixed(2)} USD</p>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                          status === 'despachada' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                          status === 'rechazada' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
-                          'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                        }`}>
-                          {status}
-                        </span>
-                      </div>
-
-                      {/* Campo para notas de entrega */}
+                return (
+                  <div key={inv.id} className={`border p-4 rounded-xl space-y-3 ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'}`}>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b pb-3 border-opacity-50">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Notas de Entrega / Novedades</label>
-                        <input
-                          type="text"
-                          placeholder="Ej. Entregado al celador, cliente ausente, etc."
-                          defaultValue={inv.delivery_notes || ''}
-                          onChange={(e) => setDeliveryNotes({ ...deliveryNotes, [inv.id]: e.target.value })}
-                          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
-                        />
+                        <span className="text-xs font-mono text-blue-400 font-bold">FACTURA #{inv.id.slice(0, 8)}</span>
+                        <p className={`text-base font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>${Number(inv.total || 0).toFixed(2)} USD</p>
                       </div>
-
-                      {/* Botones de estatus */}
-                      <div className="flex flex-wrap gap-2 pt-2">
-                        <button
-                          onClick={() => handleUpdateStatus(inv.id, 'despachada')}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow"
-                        >
-                          ✅ Marcar Despachada
-                        </button>
-                        <button
-                          onClick={() => handleUpdateStatus(inv.id, 'no despachada')}
-                          className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow"
-                        >
-                          ⏳ No Despachada
-                        </button>
-                        <button
-                          onClick={() => handleUpdateStatus(inv.id, 'rechazada')}
-                          className="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow"
-                        >
-                          ❌ Rechazada / Devuelta
-                        </button>
-                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                        status === 'despachada' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        status === 'rechazada' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' :
+                        'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {status}
+                      </span>
                     </div>
-                  );
-                })
-            )}
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Notas de Entrega</label>
+                      <input
+                        type="text"
+                        placeholder="Ej. Recibido por vigilante, pago pendiente, etc."
+                        defaultValue={inv.delivery_notes || ''}
+                        onChange={(e) => setDeliveryNotes({ ...deliveryNotes, [inv.id]: e.target.value })}
+                        className={`w-full border rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500 ${isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-800 text-white'}`}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <button
+                        onClick={() => handleUpdateStatus(inv.id, 'despachada')}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow"
+                      >
+                        ✅ Marcar Despachada
+                      </button>
+                      <button
+                        onClick={() => handleUpdateStatus(inv.id, 'no despachada')}
+                        className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow"
+                      >
+                        ⏳ No Despachada
+                      </button>
+                      <button
+                        onClick={() => handleUpdateStatus(inv.id, 'rechazada')}
+                        className="bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow"
+                      >
+                        ❌ Rechazada / Devuelta
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         )}
       </div>
