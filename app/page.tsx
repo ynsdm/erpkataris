@@ -13,7 +13,7 @@ export default function Home() {
   const [tenant, setTenant] = useState<any>(null);
   const [currentView, setCurrentView] = useState<'dashboard' | 'inventory' | 'clients' | 'invoices' | 'cxc' | 'expenses' | 'analytics' | 'payroll' | 'purchases' | 'cxp' | 'configuracion' | 'ventas' | 'sellers' | 'bancos'>('dashboard');
 
-
+const [countryPackage, setCountryPackage] = useState('VE');
 
 
 const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
@@ -32,7 +32,17 @@ const [purchaseQty, setPurchaseQty] = useState('');
 const [purchaseIva, setPurchaseIva] = useState('16');
 const [purchaseNotes, setPurchaseNotes] = useState('');
 
-
+const getTaxIdLabel = (country = 'VE') => {
+  switch (country) {
+    case 'CO': return 'NIT';
+    case 'AR': return 'CUIT';
+    case 'CL': return 'RUT';
+    case 'PE': return 'RUC';
+    case 'MX': return 'RFC';
+    case 'VE':
+    default: return 'RIF';
+  }
+};
 
 const handleAddSupplier = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -942,14 +952,51 @@ const handleAddClient = async (e: React.FormEvent) => {
         const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
         if (authError) throw authError;
 
-        if (authData.user) {
-          const { data: tenantData, error: tenantError } = await supabase
-            .from('tenants')
-            .insert([{ name: companyName, exchange_rate: 36.0000 }])
-            .select()
-            .single();
+if (authData.user) {
+  // Configuración fiscal y monetaria automática según el país
+  let initialTaxRate = 16.00;
+  let initialExchangeRate = 1.00;
 
-          if (tenantError) throw tenantError;
+  switch (countryPackage) {
+    case 'CO':
+      initialTaxRate = 19.00;
+      initialExchangeRate = 4100.00; // Tasa referencial local vs USD
+      break;
+    case 'AR':
+      initialTaxRate = 21.00;
+      initialExchangeRate = 1000.00;
+      break;
+    case 'CL':
+      initialTaxRate = 19.00;
+      initialExchangeRate = 950.00;
+      break;
+    case 'PE':
+      initialTaxRate = 18.00;
+      initialExchangeRate = 3.75;
+      break;
+    case 'MX':
+      initialTaxRate = 16.00;
+      initialExchangeRate = 17.50;
+      break;
+    case 'VE':
+    default:
+      initialTaxRate = 16.00;
+      initialExchangeRate = 36.00;
+      break;
+  }
+
+  const { data: tenantData, error: tenantError } = await supabase
+    .from('tenants')
+    .insert([{ 
+      name: companyName, 
+      country: countryPackage,
+      exchange_rate: initialExchangeRate,
+      default_tax: initialTaxRate
+    }])
+    .select()
+    .single();
+
+  if (tenantError) throw tenantError;
 
           const { error: profileError } = await supabase.from('profiles').insert([
             {
@@ -4164,30 +4211,48 @@ const handleExportInventory = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && (
-            <>
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre de la Empresa</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej. Corporación Kataris C.A."
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre Completo</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Tu Nombre"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
+{!isLogin && (
+  <>
+    <div>
+      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre de la Empresa</label>
+      <input
+        type="text"
+        required
+        placeholder="Ej. Corporación Empresa C.A."
+        value={companyName}
+        onChange={(e) => setCompanyName(e.target.value)}
+        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+      />
+    </div>
+
+    {/* 👇 NUEVO CAMPO: Selector de País / Paquete Contable */}
+<div>
+  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Paquete Contable / País</label>
+  <select
+    value={countryPackage}
+    onChange={(e) => setCountryPackage(e.target.value)}
+    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+  >
+    <option value="VE">🇻🇪 Venezuela (IVA 16% / BCV / RIF)</option>
+    <option value="CO">🇨🇴 Colombia (IVA 19% / DIAN / NIT)</option>
+    <option value="AR">🇦🇷 Argentina (IVA 21% / AFIP / CUIT)</option>
+    <option value="CL">🇨🇱 Chile (IVA 19% / SII / RUT)</option>
+    <option value="PE">🇵🇪 Perú (IVA 18% / SUNAT / RUC)</option>
+    <option value="MX">🇲🇽 México (IVA 16% / SAT / RFC)</option>
+  </select>
+</div>
+
+    <div>
+      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre Completo</label>
+      <input
+        type="text"
+        required
+        placeholder="Tu Nombre"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+      />
+    </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Rol del Usuario</label>
                 <select
