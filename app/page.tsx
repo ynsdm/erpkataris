@@ -18,7 +18,7 @@ export default function Home() {
 
 const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
 const [showProcessPurchaseModal, setShowProcessPurchaseModal] = useState(false);
-const [purchasesHistory, setPurchasesHistory] = useState([]);
+const [purchasesHistory, setPurchasesHistory] = useState<any[]>([]);
 
 const [supplierName, setSupplierName] = useState('');
 const [supplierRif, setSupplierRif] = useState('');
