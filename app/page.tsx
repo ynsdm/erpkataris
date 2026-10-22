@@ -553,11 +553,13 @@ useEffect(() => {
     }
   };
 
-  const fetchAllData = async (tenantId?: string) => {
+const fetchAllData = async (tenantId?: string) => {
   const targetTenant = tenantId || profile?.tenant_id;
   if (!targetTenant) return;
-    const { data: prodData } = await supabase.from('products').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false });
-    if (prodData) setProducts(prodData);
+
+  // ✅ Asegúrate de usar 'targetTenant' aquí en lugar de 'tenantId':
+  const { data: prodData } = await supabase.from('products').select('*').eq('tenant_id', targetTenant).order('created_at', { ascending: false });
+  if (prodData) setProducts(prodData);
 
 // 10. Vendedores / Usuarios
 const { data: sellersData } = await supabase
