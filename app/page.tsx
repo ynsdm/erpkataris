@@ -553,7 +553,9 @@ useEffect(() => {
     }
   };
 
-  const fetchAllData = async (tenantId: string) => {
+  const fetchAllData = async (tenantId?: string) => {
+  const targetTenant = tenantId || profile?.tenant_id;
+  if (!targetTenant) return;
     const { data: prodData } = await supabase.from('products').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false });
     if (prodData) setProducts(prodData);
 
