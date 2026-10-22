@@ -1069,17 +1069,57 @@ const handleAddClient = async (e: React.FormEvent) => {
     exportToExcel(formattedData, 'Reporte_Cuentas_Por_Cobrar');
   };
 
-  const handleExportInventory = () => {
-    const formattedData = products.map((prod) => ({
-      ID_Producto: prod.id,
-      Nombre: prod.name,
-      Stock_Actual: prod.stock,
-      Precio_USD: Number(prod.price),
-      Precio_VES: Number(prod.price) * currentRate,
-      Valor_Stock_USD: Number(prod.price) * prod.stock,
-      Valor_Stock_VES: Number(prod.price) * prod.stock * currentRate,
-    }));
-    exportToExcel(formattedData, 'Reporte_Inventario_Kataris');
+const handleExportInventory = () => {
+    if (!products || products.length === 0) {
+      alert('No hay productos disponibles para exportar.');
+      return;
+    }
+
+    const formattedData = products.map((prod) => {
+      const price = Number(prod.price || 0);
+      const cost = Number(prod.cost || 0);
+      const stock = Number(prod.stock || 0);
+      const iva = Number(prod.iva || 16);
+      const weight = Number(prod.weight_per_unit || 0);
+      const totalWeight = stock * weight;
+      
+      const priceVes = price * currentRate;
+      const costVes = cost * currentRate;
+      const stockValueCostUSD = stock * cost;
+      const stockValueCostVES = stockValueCostUSD * currentRate;
+      const stockValuePriceUSD = stock * price;
+      const stockValuePriceVES = stockValuePriceUSD * currentRate;
+
+      return {
+        ID_Producto: prod.id,
+        SKU: prod.sku || 'N/A',
+        Nombre: prod.name,
+        Categoria: prod.category || 'General',
+        Marca: prod.brand || 'N/A',
+        Fabricante: prod.manufacturer || 'N/A',
+        Unidad_Medida: prod.unit_measure || 'Und',
+        Stock_Actual: stock,
+        Estado: prod.is_active || 'activo',
+        Costo_USD: cost,
+        Costo_VES: costVes,
+        Precio_Venta_USD: price,
+        Precio_Venta_VES: priceVes,
+        Porcentaje_IVA: `${iva}%`,
+        Punto_Reorden: prod.reorder_point || 5,
+        Min_Pedido: prod.min_order_qty || 1,
+        Max_Pedido: prod.max_order_qty || 999999,
+        Peso_Unitario_Kg: weight,
+        Peso_Total_Stock_Kg: totalWeight,
+        Facturar_Sin_Stock: prod.allow_negative ? 'Sí' : 'No',
+        Permite_Decimales: prod.allow_decimals ? 'Sí' : 'No',
+        Valor_Total_Costo_USD: stockValueCostUSD,
+        Valor_Total_Costo_VES: stockValueCostVES,
+        Valor_Total_Venta_USD: stockValuePriceUSD,
+        Valor_Total_Venta_VES: stockValuePriceVES,
+      };
+    });
+
+    exportToExcel(formattedData, 'Reporte_Inventario_Completo_Kataris');
   };
 
   const addItemToPurchaseCart = () => {
