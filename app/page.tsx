@@ -323,7 +323,7 @@ const handleProcessPayroll = async (e: React.FormEvent) => {
   }
 };
 
-const [payrollHistory, setPayrollHistory= useState<any[]>([]);
+const [payrollHistory, setPayrollHistory]= useState<any[]>([]);
 
   const [newPayrollPay, setNewPayrollPay] = useState({
     employee_id: '',
